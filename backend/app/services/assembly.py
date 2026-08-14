@@ -108,3 +108,42 @@ def finalize_episode(project_id: int, episode: int, subtitled: Path | None = Non
     if source != target:
         shutil.copyfile(source, target)
     return target
+
+
+def build_collection(project_id: int) -> Path | None:
+    """把各集 final.mp4 拼接为全剧合集 collection.mp4（-c copy 快速拼接）。
+    少于 2 集或拼接失败时返回 None。"""
+    root = project_dir(project_id)
+    eps_dir = root / "episodes"
+    finals = sorted(eps_dir.glob("ep*/final.mp4"))
+    if len(finals) < 2:
+        return None
+    ffmpeg = _find_ffmpeg()
+    concat = root / "collection-concat.txt"
+    concat.write_text("\n".join(f"file '{p.relative_to(root).as_posix()}'" for p in finals), encoding="utf-8")
+    target = root / "collection.mp4"
+    try:
+        _run(
+            [
+                ffmpeg, "-y", "-loglevel", "error",
+                "-f", "concat", "-safe", "0", "-i", str(concat),
+                "-c", "copy", str(target),
+            ],
+            cwd=root,
+        )
+    except RuntimeError as exc:
+        logger.warning("合集快速拼接失败（回退重编码）：%s", exc)
+        try:
+            _run(
+                [
+                    ffmpeg, "-y", "-loglevel", "error",
+                    "-f", "concat", "-safe", "0", "-i", str(concat),
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "128k", str(target),
+                ],
+                cwd=root,
+            )
+        except RuntimeError as exc2:
+            logger.warning("合集生成失败：%s", exc2)
+            return None
+    return target

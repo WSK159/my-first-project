@@ -23,15 +23,14 @@ def _build_prompt(series: dict, episodes: list[dict]) -> str:
     )
 
 
-def generate_novel(project_id: int, series: dict, episodes: list[dict]) -> str:
+def generate_novel(project_id: int, series: dict, episodes: list[dict], user_id: int | None = None) -> str:
     from ..config import settings
 
     if settings.llm_provider == "mock":
         novel = mock_content.make_novel(series, episodes)
     else:
-        novel = complete(_build_prompt(series, episodes), temperature=0.9)
+        novel = complete(_build_prompt(series, episodes), temperature=0.9, user_id=user_id)
         if len(novel.strip()) < 500:
             raise RuntimeError("小说生成失败：内容过短")
     write_text(project_id, "novel.md", novel)
     return novel
-

@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 
 from ..config import settings
-from .project_store import write_json
+from .project_store import read_json, write_json
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,8 @@ def _mock_wav(path: Path, seconds: float, freq: float = 440.0, amp: float = 0.22
 class SeedAudioClient:
     """火山语音 Seed Audio 直接 API 客户端。"""
 
-    def __init__(self) -> None:
-        self.api_key = settings.seed_audio_api_key
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key or settings.seed_audio_api_key
         self.base_url = settings.seed_audio_base_url.rstrip("/")
         self.model = settings.seed_audio_model
 
@@ -136,10 +136,12 @@ def build_audio_plan(episode_script: dict) -> list[dict]:
     return plan
 
 
-def _generate_scene_audio(project_id: int, episode: int, scene: dict, prompt: str, duration: float) -> dict:
+def _generate_scene_audio(
+    project_id: int, episode: int, scene: dict, prompt: str, duration: float, api_key: str | None = None
+) -> dict:
     rel = f"episodes/ep{episode:03d}/audio/scene-{scene['scene']:02d}.wav"
     path = _project_file(project_id, rel)
-    client = SeedAudioClient()
+    client = SeedAudioClient(api_key)
     if client.available:
         result = client.generate(prompt, path)
         return {"scene": scene["scene"], "audio": rel, "provider": "seed-audio", **result}
@@ -153,7 +155,9 @@ def _project_file(project_id: int, rel_path: str) -> Path:
     return project_dir(project_id) / rel_path
 
 
-def generate_project_audio(project_id: int, series: dict, characters: dict, episodes: list[dict]) -> dict:
+def generate_project_audio(
+    project_id: int, series: dict, characters: dict, episodes: list[dict], api_key: str | None = None
+) -> dict:
     """逐集生成配音/环境音（场景级 cue sheet），写入 audio-manifest.json。"""
     voice_notes = characters.get("voice_notes", {})
     tasks: list[tuple[int, dict, str, float]] = []
@@ -165,9 +169,14 @@ def generate_project_audio(project_id: int, series: dict, characters: dict, epis
             tasks.append((ep, scene, prompt, item["duration"]))
 
     with ThreadPoolExecutor(max_workers=min(3, settings.llm_max_workers)) as pool:
-        futures = [pool.submit(_generate_scene_audio, project_id, ep, scene, prompt, duration) for ep, scene, prompt, duration in tasks]
+        futures = [
+            pool.submit(_generate_scene_audio, project_id, ep, scene, prompt, duration, api_key)
+            for ep, scene, prompt, duration in tasks
+        ]
         results = [f.result() for f in futures]
-    manifest: dict[str, list] = {}
+    manifest: dict[str, list] = read_json(project_id, "audio-manifest.json")
+    if not isinstance(manifest, dict):
+        manifest = {}
     for (ep, _scene, _prompt, _dur), result in zip(tasks, results):
         manifest.setdefault(str(ep), []).append(result)
     write_json(project_id, "audio-manifest.json", manifest)

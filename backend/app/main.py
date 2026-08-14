@@ -23,6 +23,14 @@ app.include_router(delivery.router, prefix="/api/delivery", tags=["delivery"])
 app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
 
 
+@app.on_event("startup")
+def startup_resume() -> None:
+    """启动时自动恢复未完成项目（断点续跑）。"""
+    from .workers.pipeline_runner import resume_projects
+
+    resume_projects()
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "app": settings.app_name}

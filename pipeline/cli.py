@@ -12,10 +12,12 @@ from app.config import settings  # noqa: E402
 from app.services import audio as audio_svc  # noqa: E402
 from app.services import assembly as assembly_svc  # noqa: E402
 from app.services import characters as characters_svc  # noqa: E402
+from app.services import continuity as continuity_svc  # noqa: E402
 from app.services import delivery as delivery_svc  # noqa: E402
 from app.services import episodes as episodes_svc  # noqa: E402
 from app.services import images as images_svc  # noqa: E402
 from app.services import novel as novel_svc  # noqa: E402
+from app.services import outline as outline_svc  # noqa: E402
 from app.services import series as series_svc  # noqa: E402
 from app.services import shots as shots_svc  # noqa: E402
 from app.services import subtitles as subtitles_svc  # noqa: E402
@@ -33,20 +35,27 @@ def run(project_id: int, idea: str, random_mode: bool, genre: str, episodes: int
     characters = characters_svc.generate_characters(project_id, series)
     print(f"      角色：{', '.join(c['name'] for c in characters['characters'])}")
 
+    print("[2.5/10] 全剧大纲（大纲先行）…")
+    outline = outline_svc.generate_outline(project_id, series, characters, episodes)
+    print(f"      大纲完成：{len(outline.get('episodes', []))} 集")
+
+    print("[2.8/10] 全剧一致性台账 …")
+    continuity = continuity_svc.build_consistency_ledger(project_id, series, characters)
+
     print(f"[3/10] 分集剧本（{episodes} 集，并发 {settings.llm_max_workers}）…")
-    episode_scripts = episodes_svc.generate_episodes(project_id, series, characters, episodes, seconds)
+    episode_scripts = episodes_svc.generate_episodes(project_id, series, characters, episodes, seconds, outline, continuity)
 
     print("[4/10] 分镜/视频提示词 …")
     shots_map = {}
     for script in episode_scripts:
         ep = script["episode"]
-        shots_map[ep] = shots_svc.generate_shots(project_id, script, characters, ep)
+        shots_map[ep] = shots_svc.generate_shots(project_id, script, characters, ep, continuity)
 
     if settings.media_enabled or settings.mock_media:
         print("[5/10] 视觉资产（角色/场景/封面）…")
-        images_svc.generate_project_images(project_id, series, characters)
+        images_svc.generate_project_images(project_id, series, characters, continuity)
         print("[6/10] 视频片段（Seedance/mock）…")
-        videos_svc.generate_project_videos(project_id, episode_scripts, shots_map)
+        videos_svc.generate_project_videos(project_id, episode_scripts, shots_map, continuity)
         print("[7/10] 配音与音乐（Seed Audio/mock）…")
         audio_svc.generate_project_audio(project_id, series, characters, episode_scripts)
         print("[8/10] FFmpeg 合成与字幕 …")

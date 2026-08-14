@@ -46,7 +46,16 @@ class OpenAICompatLLM:
         return resp.json()["choices"][0]["message"]["content"]
 
 
-def get_llm():
+def get_llm(user_id: int | None = None):
+    if user_id is not None:
+        try:
+            from . import keys
+
+            user_key = keys.get_user_overrides(user_id).get("llm", "")
+            if user_key:
+                return OpenAICompatLLM(user_key, settings.deepseek_base_url, settings.deepseek_model)
+        except Exception:  # noqa: BLE001 密钥读取失败时回退平台配置
+            logger.exception("读取用户 LLM Key 失败")
     if settings.llm_provider == "deepseek":
         return OpenAICompatLLM(settings.deepseek_api_key, settings.deepseek_base_url, settings.deepseek_model)
     if settings.llm_provider == "openai":
@@ -54,12 +63,11 @@ def get_llm():
     return MockLLM()
 
 
-def complete(prompt: str, system: str = "你是一名专业短剧编剧与导演。", temperature: float = 0.8) -> str:
-    return get_llm().complete(
+def complete(prompt: str, system: str = "你是一名专业短剧编剧与导演。", temperature: float = 0.8, user_id: int | None = None) -> str:
+    return get_llm(user_id).complete(
         [
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ],
         temperature=temperature,
     )
-

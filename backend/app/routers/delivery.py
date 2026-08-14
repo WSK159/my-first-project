@@ -61,3 +61,19 @@ def download_archive(project_id: int, user: User = Depends(get_current_user), db
     if not path.exists():
         raise HTTPException(status_code=404, detail="交付包文件缺失")
     return FileResponse(path, media_type="application/zip", filename=path.name)
+
+
+@router.get("/{project_id}/collection")
+def download_collection(project_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """全剧合集（按需构建并缓存）：各集 final.mp4 快速拼接。"""
+    project = _get_owned_project(project_id, user, db)
+    if not project.video_ready:
+        raise HTTPException(status_code=404, detail="成片尚未生成")
+    path = project_dir(project_id) / "collection.mp4"
+    if not path.exists():
+        from ..services.assembly import build_collection
+
+        build_collection(project_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="合集生成失败（至少需要 2 集成片）")
+    return FileResponse(path, media_type="video/mp4", filename=path.name)

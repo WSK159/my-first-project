@@ -60,8 +60,8 @@ def _color_for(text: str) -> tuple[int, int, int]:
 class SeedreamClient:
     """火山方舟 Seedream 直接 API 客户端（不走机器特定脚本路径）。"""
 
-    def __init__(self) -> None:
-        self.api_key = settings.seedream_api_key
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key or settings.seedream_api_key
         self.base_url = settings.seedream_base_url.rstrip("/")
         self.model = settings.seedream_model
 
@@ -91,11 +91,13 @@ class SeedreamClient:
         return image.content
 
 
-def generate_image(project_id: int, rel_path: str, prompt: str, ratio: str = "9:16", seed: str = "") -> Path:
+def generate_image(
+    project_id: int, rel_path: str, prompt: str, ratio: str = "9:16", seed: str = "", api_key: str | None = None
+) -> Path:
     """生成单张图片：有 key 走 Seedream，否则写 mock 占位图。"""
     target = Path(rel_path) if not rel_path.startswith("project") else None
     path = _project_path(project_id, rel_path)
-    client = SeedreamClient()
+    client = SeedreamClient(api_key)
     if client.available:
         try:
             content = client.generate(prompt, size="2K", ratio=ratio)
@@ -114,40 +116,66 @@ def _project_path(project_id: int, rel_path: str) -> Path:
     return project_dir(project_id) / rel_path
 
 
-def _character_prompt(char: dict, tone: str) -> str:
+def _character_prompt(char: dict, tone: str, registry_char: dict | None = None) -> str:
     va = char.get("visual_anchor", {})
+    reg = registry_char or {}
     parts = [
         f"正面半身角色设定照：{char.get('name', '角色')}，{char.get('age', '')}岁，{char.get('gender', '')}",
-        f"面容：{va.get('face', '清晰五官')}",
+        f"面容：{reg.get('face') or va.get('face', '清晰五官')}",
+        f"发型：{reg.get('hair') or va.get('hair', '自然发型')}",
         f"体态：{va.get('body', '自然站姿')}",
-        f"服装：{va.get('wardrobe', '简洁服装')}",
-        f"标志道具：{va.get('props', '无')}",
+        f"服装：{reg.get('outfit') or va.get('wardrobe', '简洁服装')}",
+        f"标志道具：{reg.get('props') or va.get('props', '无')}",
         f"主色板：{va.get('palette', '中性色')}",
         f"系列视觉基调：{tone}",
-        "不变项：" + "、".join(va.get("invariants", [])),
+        "不变项：" + "、".join(reg.get("invariants") or va.get("invariants", [])),
         "电影级质感，稳定光照，清晰五官，无文字无字幕无水印，画面只含一人。",
     ]
     return "，".join(parts)
 
 
-def generate_project_images(project_id: int, series: dict, characters: dict) -> dict:
+def generate_project_images(
+    project_id: int,
+    series: dict,
+    characters: dict,
+    continuity: dict | None = None,
+    api_key: str | None = None,
+) -> dict:
     """生成全部视觉资产并回写 characters.json（含图片路径）。"""
     tone = series.get("tone", "电影质感")
+    registry = (continuity or {}).get("registry", {})
+    style = (continuity or {}).get("style", {})
+    registry_chars = {c.get("id"): c for c in registry.get("characters", [])}
+    registry_scenes = {s.get("id"): s for s in registry.get("scenes", [])}
     for char in characters.get("characters", []):
         cid = char.get("id", "char")
         rel = f"characters/{cid}.png"
-        generate_image(project_id, rel, _character_prompt(char, tone), ratio="3:4", seed=f"{series.get('title','')}{char.get('name','')}")
+        generate_image(
+            project_id,
+            rel,
+            _character_prompt(char, tone, registry_chars.get(cid)),
+            ratio="3:4",
+            seed=f"{series.get('title','')}{char.get('name','')}",
+            api_key=api_key,
+        )
         char["image"] = rel
 
     cover_prompt = (
         f"竖屏短剧宣传封面，标题「{series.get('title', '')}」，{series.get('genre', '')}题材，"
-        f"主角{characters['characters'][0]['name']}处于画面中心，情绪张力拉满，{tone}，电影海报质感，构图饱满。"
+        f"主角{characters['characters'][0]['name']}处于画面中心，{style.get('cover_layout', '情绪张力拉满')}，"
+        f"主色板：{'/'.join(style.get('color_palette', [])) or tone}，电影海报质感，构图饱满。"
     )
-    generate_image(project_id, "cover.png", cover_prompt, ratio="9:16", seed=series.get("title", "cover"))
+    generate_image(project_id, "cover.png", cover_prompt, ratio="9:16", seed=series.get("title", "cover"), api_key=api_key)
 
     for idx, loc in enumerate(series.get("locations", []), start=1):
-        scene_prompt = f"场景概念图：{loc.get('name', '场景')}，{loc.get('visual', '')}，{tone}，无人，电影场景设计图。"
-        generate_image(project_id, f"scenes/scene{idx:02d}.png", scene_prompt, ratio="16:9", seed=loc.get("name", f"scene{idx}"))
+        scene_id = f"scene{idx:02d}"
+        reg = registry_scenes.get(scene_id, {})
+        scene_prompt = (
+            f"场景概念图：{reg.get('name') or loc.get('name', '场景')}，{reg.get('visual') or loc.get('visual', '')}，"
+            f"光线：{reg.get('lighting', '稳定主光')}，道具：{'、'.join(reg.get('props', []))}，"
+            f"{style.get('tone') or tone}，无人，电影场景设计图，画面纯净无文字。"
+        )
+        generate_image(project_id, f"scenes/{scene_id}.png", scene_prompt, ratio="16:9", seed=scene_id, api_key=api_key)
 
     write_json(project_id, "characters.json", characters)
     write_text(project_id, "characters.md", _characters_md(characters))
@@ -167,4 +195,3 @@ def _characters_md(characters: dict) -> str:
     lines.append(f"## 出演规则\n{characters.get('cast_rules', '')}")
     lines.append(f"\n## 音色备注\n{dump_json(characters.get('voice_notes', {}))}")
     return "\n".join(lines)
-

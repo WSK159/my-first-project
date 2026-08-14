@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     llm_max_workers: int = 3          # 分集生成并发上限
     media_enabled: bool = False       # 阶段2+ 开启媒体生成后置 True
     mock_media: bool = True           # mock 档位用 ffmpeg 生成占位媒体
+    task_retry_attempts: int = 3      # 每步骤最大尝试次数
+    resume_on_startup: bool = True    # 服务启动时自动恢复未完成项目
+    max_concurrent_projects: int = 2  # 同时运行的项目数
+    episode_budget_ratio: float = 0.9 # 每集预算占均摊金额的比例（预留缓冲）
+    event_log_max_lines: int = 2000   # 事件日志保留行数
+    collection_enabled: bool = True   # 是否允许生成全剧合集
 
 
 settings = Settings()

@@ -23,16 +23,15 @@ def _build_prompt(series: dict) -> str:
     )
 
 
-def generate_characters(project_id: int, series: dict) -> dict:
+def generate_characters(project_id: int, series: dict, user_id: int | None = None) -> dict:
     from ..config import settings
 
     if settings.llm_provider == "mock":
         characters = mock_content.make_characters(series)
     else:
-        characters = extract_json(complete(_build_prompt(series), temperature=0.85))
+        characters = extract_json(complete(_build_prompt(series), temperature=0.85, user_id=user_id))
         if not characters or "characters" not in characters:
             raise RuntimeError("角色设定生成失败：LLM 输出无法解析")
     write_json(project_id, "characters.json", characters)
     write_text(project_id, "characters.md", to_markdown("角色设定", characters))
     return characters
-

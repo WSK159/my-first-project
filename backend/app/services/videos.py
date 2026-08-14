@@ -10,7 +10,7 @@ from pathlib import Path
 import httpx
 
 from ..config import settings
-from .project_store import write_json
+from .project_store import read_json, write_json
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +65,8 @@ def _mock_last_frame(video: Path, frame: Path) -> Path:
 class SeedanceClient:
     """火山方舟 Seedance 直接 API 客户端。"""
 
-    def __init__(self) -> None:
-        self.api_key = settings.seedance_api_key
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key or settings.seedance_api_key
         self.base_url = settings.seedance_base_url.rstrip("/")
         self.model = settings.seedance_model
 
@@ -137,10 +137,11 @@ def _generate_one_clip(
     prompt: str,
     duration: int,
     first_frame: Path | None,
+    api_key: str | None = None,
 ) -> dict:
     rel_dir = f"episodes/ep{episode:03d}/videos/clip-{clip_no:02d}"
     video_path = _project_file(project_id, f"{rel_dir}/video.mp4")
-    client = SeedanceClient()
+    client = SeedanceClient(api_key)
     if client.available:
         task_id = client.create_task(prompt, duration, first_frame)
         task = client.poll_task(task_id)
@@ -184,19 +185,42 @@ def _project_file(project_id: int, rel_path: str) -> Path:
     return project_dir(project_id) / rel_path
 
 
-def _clip_prompt(clip: dict) -> str:
+def _clip_prompt(clip: dict, continuity: dict | None = None, script: dict | None = None) -> str:
     beats = "；".join(clip.get("timeline_beats", []))
     rules = "；".join(clip.get("continuity_rules", []))
     negative = "；".join(clip.get("negative", []))
-    return (
+    prompt = (
         f"{beats}。运镜：{clip.get('camera', '固定机位')}。"
         f"连续性：{rules}。避免：{negative}。角色身份与服装严格参考提供的角色图。"
     )
+    if continuity:
+        registry = continuity.get("registry", {})
+        style = continuity.get("style", {})
+        scene_id = clip.get("references", {}).get("scene", "")
+        scene = next((s for s in registry.get("scenes", []) if s.get("id") == scene_id), None)
+        if scene:
+            prompt += f" 场景必须严格匹配：{scene.get('name')}，{scene.get('visual', '')}，光线{scene.get('lighting', '')}，运镜习惯{scene.get('camera_habit', '')}。"
+        chars = registry.get("characters", [])
+        if chars:
+            fixed = "；".join(
+                f"{c.get('name')}:面容{c.get('face')}，发型{c.get('hair')}，服装{c.get('outfit')}，配饰{c.get('props')}"
+                for c in chars[:2]
+            )
+            prompt += f" 角色外观固定：{fixed}。"
+        if style:
+            prompt += f" 全局风格：{style.get('tone', '')}，主色板{'/'.join(style.get('color_palette', []))}，镜头语言{style.get('lens_language', '')}。"
+    return prompt
 
 
-def generate_project_videos(project_id: int, episodes: list[dict], shots_map: dict[int, dict]) -> dict:
+def generate_project_videos(
+    project_id: int,
+    episodes: list[dict],
+    shots_map: dict[int, dict],
+    continuity: dict | None = None,
+    api_key: str | None = None,
+) -> dict:
     """按集生成视频片段。真实模式按尾帧链顺序生成；mock 模式并发生成。"""
-    client = SeedanceClient()
+    client = SeedanceClient(api_key)
     tasks: list[tuple[int, int, str, int, Path | None]] = []
     for script in episodes:
         ep = script.get("episode", 1)
@@ -207,9 +231,11 @@ def generate_project_videos(project_id: int, episodes: list[dict], shots_map: di
         for clip in clips:
             clip_no = int(str(clip.get("clip", "clip-01")).replace("clip-", ""))
             duration = max(4, min(int(clip.get("duration_hint", 10)), 15))
-            tasks.append((ep, clip_no, _clip_prompt(clip), duration, None))
+            tasks.append((ep, clip_no, _clip_prompt(clip, continuity, script), duration, None))
 
-    manifest = {"episodes": {}}
+    manifest = read_json(project_id, "videos-manifest.json")
+    if not isinstance(manifest, dict) or "episodes" not in manifest:
+        manifest = {"episodes": {}}
     if client.available:
         # 真实模式：逐段生成，上一段尾帧作为下一段首帧（跨集重置）
         last_frame: Path | None = None
@@ -218,13 +244,13 @@ def generate_project_videos(project_id: int, episodes: list[dict], shots_map: di
             if ep != current_ep:
                 last_frame = None
                 current_ep = ep
-            result = _generate_one_clip(project_id, ep, clip_no, prompt, duration, last_frame)
+            result = _generate_one_clip(project_id, ep, clip_no, prompt, duration, last_frame, api_key)
             if result["last_frame"]:
                 last_frame = _project_file(project_id, result["last_frame"])
             manifest["episodes"].setdefault(str(ep), []).append(result)
     else:
         with ThreadPoolExecutor(max_workers=min(3, settings.llm_max_workers)) as pool:
-            futures = [pool.submit(_generate_one_clip, project_id, ep, clip_no, prompt, duration, None) for ep, clip_no, prompt, duration, _ in tasks]
+            futures = [pool.submit(_generate_one_clip, project_id, ep, clip_no, prompt, duration, None, api_key) for ep, clip_no, prompt, duration, _ in tasks]
             for f in futures:
                 result = f.result()
                 manifest["episodes"].setdefault(str(result["episode"]), []).append(result)

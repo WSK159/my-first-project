@@ -24,17 +24,23 @@ def _build_prompt(idea: str, random_mode: bool, genre: str, episode_count: int) 
     )
 
 
-def generate_series(project_id: int, idea: str = "", random_mode: bool = False, genre: str = "", episode_count: int = 1) -> dict:
+def generate_series(
+    project_id: int,
+    idea: str = "",
+    random_mode: bool = False,
+    genre: str = "",
+    episode_count: int = 1,
+    user_id: int | None = None,
+) -> dict:
     """返回 series 字典，并写入 series.json / series.md。"""
     from ..config import settings
 
     if settings.llm_provider == "mock" or random_mode:
         series = mock_content.make_series(idea, genre, episode_count)
     else:
-        series = extract_json(complete(_build_prompt(idea, random_mode, genre, episode_count), temperature=0.85))
+        series = extract_json(complete(_build_prompt(idea, random_mode, genre, episode_count), temperature=0.85, user_id=user_id))
         if not series:
             raise RuntimeError("系列设定生成失败：LLM 输出无法解析")
     write_json(project_id, "series.json", series)
     write_text(project_id, "series.md", to_markdown(series.get("title", "系列设定"), series))
     return series
-
