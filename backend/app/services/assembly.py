@@ -21,7 +21,8 @@ def probe_duration(path: Path) -> float:
 
 def _probe_duration_uncached(path: Path, _mtime: float) -> float:
     ffmpeg = _find_ffmpeg()
-    ffprobe = str(Path(ffmpeg).parent / "ffprobe.exe")
+    ffprobe_candidate = Path(ffmpeg).parent / "ffprobe.exe"
+    ffprobe = str(ffprobe_candidate) if ffprobe_candidate.exists() else "ffprobe"
     result = subprocess.run(
         [ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
         check=True,

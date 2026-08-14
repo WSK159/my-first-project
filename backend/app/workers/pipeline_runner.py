@@ -256,7 +256,14 @@ def run_project_pipeline(project_id: int) -> None:
             return
         _running.add(project_id)
     try:
-        _run_inner(project_id)
+        try:
+            _run_inner(project_id)
+        except Exception as exc:  # noqa: BLE001 兜底：任何未预期异常都要落库并可见
+            logger.exception("流水线异常 project_id=%s", project_id)
+            try:
+                _update(project_id, "failed", 0.0, status="failed", error=f"{type(exc).__name__}: {exc}")
+            except Exception:  # noqa: BLE001
+                logger.exception("异常兜底写库也失败 project_id=%s", project_id)
     finally:
         with _lock:
             _running.discard(project_id)
