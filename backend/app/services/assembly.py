@@ -3,6 +3,7 @@
 import logging
 import shutil
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 from .project_store import project_dir, read_json
@@ -11,7 +12,14 @@ from .videos import _find_ffmpeg
 logger = logging.getLogger(__name__)
 
 
+@lru_cache(maxsize=4096)
 def probe_duration(path: Path) -> float:
+    """探测媒体时长（带缓存，按路径+修改时间失效）。"""
+    mtime = path.stat().st_mtime if path.exists() else 0
+    return _probe_duration_uncached(path, mtime)
+
+
+def _probe_duration_uncached(path: Path, _mtime: float) -> float:
     ffmpeg = _find_ffmpeg()
     ffprobe = str(Path(ffmpeg).parent / "ffprobe.exe")
     result = subprocess.run(

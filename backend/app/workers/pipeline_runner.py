@@ -434,9 +434,9 @@ def _run_inner(project_id: int) -> None:
 
     # 12) 交付
     if media_enabled:
-        delivery_svc.build_delivery_package(project_id)
         if settings.collection_enabled:
             assembly_svc.build_collection(project_id)
+        delivery_svc.build_delivery_package(project_id)
         _update(project_id, "delivery", 0.98)
 
     # 汇总状态

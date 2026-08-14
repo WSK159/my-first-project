@@ -40,6 +40,7 @@ def _metadata(project_id: int) -> dict:
         "total_seconds": round(total_seconds, 1),
         "total_minutes": total_minutes,
         "episodes": episodes_meta,
+        "collection": "collection.mp4" if (project_dir(project_id) / "collection.mp4").exists() else "",
         "video_tokens": total_tokens,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "platform": "AI短剧工坊",
