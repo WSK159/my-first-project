@@ -11,11 +11,11 @@
     <div class="row">
       <div class="field">
         <label>集数</label>
-        <input v-model.number="episodes" type="number" min="1" max="20" />
+        <input v-model.number="episodes" type="number" min="1" max="60" />
       </div>
       <div class="field">
         <label>单集秒数</label>
-        <input v-model.number="seconds" type="number" min="15" max="180" step="15" />
+        <input v-model.number="seconds" type="number" min="90" max="180" step="30" />
       </div>
       <div class="field">
         <label>生成档位</label>
@@ -49,7 +49,7 @@ import { api, state } from "../api";
 const router = useRouter();
 const idea = ref("");
 const episodes = ref(1);
-const seconds = ref(60);
+const seconds = ref(120);
 const tier = ref("mock");
 const cost = ref(0);
 const error = ref("");
@@ -94,4 +94,3 @@ async function create() {
   }
 }
 </script>
-

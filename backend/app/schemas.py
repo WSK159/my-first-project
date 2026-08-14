@@ -23,8 +23,8 @@ class EstimateIn(BaseModel):
     idea: str = ""
     random_mode: bool = False
     genre: str = ""
-    episode_count: int = Field(default=1, ge=1, le=20)
-    seconds_per_episode: int = Field(default=60, ge=15, le=180)
+    episode_count: int = Field(default=1, ge=1, le=60)
+    seconds_per_episode: int = Field(default=120, ge=90, le=180)
     video_tier: str = Field(default="mock", pattern="^(mock|fast|quality)$")
 
 
@@ -53,4 +53,3 @@ class EstimateOut(BaseModel):
     balance_cents: int
     sufficient: bool
     detail: dict
-
