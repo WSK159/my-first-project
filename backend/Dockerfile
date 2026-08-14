@@ -11,10 +11,11 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY backend/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
-COPY app ./app
+COPY backend/app ./app
+COPY pipeline ./pipeline
 
 # 运行时数据目录（docker-compose 挂载 volume 时会覆盖；此 mkdir 保证独立运行时可用）
 RUN mkdir -p /app/data/projects

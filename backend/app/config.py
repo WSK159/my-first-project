@@ -2,9 +2,16 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# 仓库根目录：backend/app/config.py -> parents[0]=app, [1]=backend, [2]=repo root
-ROOT_DIR = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT_DIR / "backend" / "data"
+# 仓库根目录：本地 backend/app/config.py -> parents[2]=repo root；Docker /app/app/config.py -> parents[1]=/app
+_config_file = Path(__file__).resolve()
+ROOT_DIR = (
+    _config_file.parents[2]
+    if (_config_file.parents[2] / "pipeline").exists()
+    else _config_file.parents[1]
+)
+# 本地 backend/data 或 Docker 挂载 /app/data
+_data_candidate = ROOT_DIR / "backend" / "data"
+DATA_DIR = _data_candidate if _data_candidate.exists() else ROOT_DIR / "data"
 PROJECTS_DIR = DATA_DIR / "projects"
 
 
