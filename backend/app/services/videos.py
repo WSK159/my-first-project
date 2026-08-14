@@ -241,11 +241,12 @@ def _generate_one_clip(
     first_frame: Path | None,
     api_key: str | None = None,
     reference_images: list[Path] | None = None,
+    force_mock: bool = False,
 ) -> dict:
     rel_dir = f"episodes/ep{episode:03d}/videos/clip-{clip_no:02d}"
     video_path = _project_file(project_id, f"{rel_dir}/video.mp4")
     client = SeedanceClient(api_key)
-    if client.available:
+    if client.available and not force_mock:
         task_id = client.create_task(prompt, duration, first_frame)
         task = client.poll_task(task_id)
         url = ((task.get("content") or {}).get("video_url")) or ""
@@ -267,7 +268,7 @@ def _generate_one_clip(
             "provider": "seedance",
         }
     minimax = MiniMaxVideoClient()
-    if minimax.available:
+    if minimax.available and not force_mock:
         task_id = minimax.create_task(prompt, duration, first_frame, reference_images)
         video_url = minimax.poll_task(task_id)
         minimax.download(video_url, video_path)
@@ -341,6 +342,7 @@ def generate_project_videos(
     continuity: dict | None = None,
     api_key: str | None = None,
     reference_images: dict[int, list[Path]] | None = None,
+    force_mock: bool = False,
 ) -> dict:
     """按集生成视频片段。真实模式按尾帧链顺序生成；mock 模式并发生成。"""
     client = SeedanceClient(api_key)
@@ -367,14 +369,14 @@ def generate_project_videos(
             if ep != current_ep:
                 last_frame = None
                 current_ep = ep
-            result = _generate_one_clip(project_id, ep, clip_no, prompt, duration, last_frame, api_key, refs)
+            result = _generate_one_clip(project_id, ep, clip_no, prompt, duration, last_frame, api_key, refs, force_mock)
             if result["last_frame"]:
                 last_frame = _project_file(project_id, result["last_frame"])
             results.append(result)
     else:
         with ThreadPoolExecutor(max_workers=min(3, settings.llm_max_workers)) as pool:
             futures = [
-                pool.submit(_generate_one_clip, project_id, ep, clip_no, prompt, duration, None, api_key, refs)
+                pool.submit(_generate_one_clip, project_id, ep, clip_no, prompt, duration, None, api_key, refs, force_mock)
                 for ep, clip_no, prompt, duration, refs in tasks
             ]
             for f in futures:

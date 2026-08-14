@@ -131,13 +131,19 @@ class MiniMaxImageClient:
 
 
 def generate_image(
-    project_id: int, rel_path: str, prompt: str, ratio: str = "9:16", seed: str = "", api_key: str | None = None
+    project_id: int,
+    rel_path: str,
+    prompt: str,
+    ratio: str = "9:16",
+    seed: str = "",
+    api_key: str | None = None,
+    force_mock: bool = False,
 ) -> Path:
     """生成单张图片：有 key 走 Seedream，否则写 mock 占位图。"""
     target = Path(rel_path) if not rel_path.startswith("project") else None
     path = _project_path(project_id, rel_path)
     client = SeedreamClient(api_key)
-    if client.available:
+    if client.available and not force_mock:
         try:
             content = client.generate(prompt, size="2K", ratio=ratio)
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -147,7 +153,7 @@ def generate_image(
         except Exception as exc:  # noqa: BLE001
             logger.warning("Seedream 生成失败，回退 mock 占位：%s", exc)
     minimax = MiniMaxImageClient()
-    if minimax.available:
+    if minimax.available and not force_mock:
         try:
             content = minimax.generate(prompt, ratio=ratio)
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -189,6 +195,7 @@ def generate_project_images(
     characters: dict,
     continuity: dict | None = None,
     api_key: str | None = None,
+    force_mock: bool = False,
 ) -> dict:
     """生成全部视觉资产并回写 characters.json（含图片路径）。"""
     tone = series.get("tone", "电影质感")
@@ -206,6 +213,7 @@ def generate_project_images(
             ratio="3:4",
             seed=f"{series.get('title','')}{char.get('name','')}",
             api_key=api_key,
+            force_mock=force_mock,
         )
         char["image"] = rel
 
@@ -214,7 +222,10 @@ def generate_project_images(
         f"主角{characters['characters'][0]['name']}处于画面中心，{style.get('cover_layout', '情绪张力拉满')}，"
         f"主色板：{'/'.join(style.get('color_palette', [])) or tone}，电影海报质感，构图饱满。"
     )
-    generate_image(project_id, "cover.png", cover_prompt, ratio="9:16", seed=series.get("title", "cover"), api_key=api_key)
+    generate_image(
+        project_id, "cover.png", cover_prompt, ratio="9:16", seed=series.get("title", "cover"), api_key=api_key,
+        force_mock=force_mock,
+    )
 
     for idx, loc in enumerate(series.get("locations", []), start=1):
         scene_id = f"scene{idx:02d}"
@@ -224,7 +235,10 @@ def generate_project_images(
             f"光线：{reg.get('lighting', '稳定主光')}，道具：{'、'.join(reg.get('props', []))}，"
             f"{style.get('tone') or tone}，无人，电影场景设计图，画面纯净无文字。"
         )
-        generate_image(project_id, f"scenes/{scene_id}.png", scene_prompt, ratio="16:9", seed=scene_id, api_key=api_key)
+        generate_image(
+            project_id, f"scenes/{scene_id}.png", scene_prompt, ratio="16:9", seed=scene_id, api_key=api_key,
+            force_mock=force_mock,
+        )
 
     write_json(project_id, "characters.json", characters)
     write_text(project_id, "characters.md", _characters_md(characters))

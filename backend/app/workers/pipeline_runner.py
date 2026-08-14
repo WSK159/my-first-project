@@ -344,12 +344,15 @@ def _run_inner(project_id: int) -> None:
 
     media_enabled = settings.media_enabled or settings.mock_media
     if media_enabled:
+        force_mock = tier == "mock"
         # 7) 图片（全局一次，产物存在跳过）
         if not _artifact(project_dir(project_id) / "cover.png"):
             _upsert_task(project_id, 0, "images", status="running")
             _retry(
                 "图片生成",
-                lambda: images_svc.generate_project_images(project_id, series, characters, continuity, api_key=image_key),
+                lambda: images_svc.generate_project_images(
+                    project_id, series, characters, continuity, api_key=image_key, force_mock=force_mock
+                ),
             )
             _mark_done(project_id, 0, "images", {"cost_cents": 0})
         else:
@@ -382,7 +385,8 @@ def _run_inner(project_id: int) -> None:
                     if len(refs) >= 3:
                         break
                 manifest = videos_svc.generate_project_videos(
-                    project_id, [s], {e: sh}, continuity, api_key=api_key, reference_images={e: refs}
+                    project_id, [s], {e: sh}, continuity, api_key=api_key,
+                    reference_images={e: refs}, force_mock=force_mock,
                 )
                 clips = manifest.get("episodes", {}).get(str(e), [])
                 seconds_sum = 0
@@ -422,7 +426,9 @@ def _run_inner(project_id: int) -> None:
                 continue
 
             def audio_fn(e=ep, s=script):
-                manifest = audio_svc.generate_project_audio(project_id, series, characters, [s], api_key=audio_key)
+                manifest = audio_svc.generate_project_audio(
+                    project_id, series, characters, [s], api_key=audio_key, force_mock=force_mock
+                )
                 rows = manifest.get(str(e), [])
                 seconds_sum = sum(float(r.get("duration", 0)) for r in rows)
                 return {"seconds": seconds_sum, "provider": "seed-audio" if audio_key else "mock"}

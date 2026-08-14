@@ -4,10 +4,15 @@
 """
 
 import json
+import os
 import shutil
 import sys
 import time
 from pathlib import Path
+
+os.environ["LLM_PROVIDER"] = "mock"
+os.environ["MINIMAX_API_KEY"] = ""
+os.environ["DEEPSEEK_API_KEY"] = ""
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))

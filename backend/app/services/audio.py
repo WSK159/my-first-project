@@ -216,15 +216,16 @@ def _generate_scene_audio(
     duration: float,
     api_key: str | None = None,
     voice_map: dict[str, str] | None = None,
+    force_mock: bool = False,
 ) -> dict:
     rel = f"episodes/ep{episode:03d}/audio/scene-{scene['scene']:02d}.wav"
     path = _project_file(project_id, rel)
     client = SeedAudioClient(api_key)
-    if client.available:
+    if client.available and not force_mock:
         result = client.generate(prompt, path)
         return {"scene": scene["scene"], "audio": rel, "provider": "seed-audio", **result}
     minimax = MiniMaxTTSClient()
-    if minimax.available:
+    if minimax.available and not force_mock:
         ep_audio = _project_file(project_id, f"episodes/ep{episode:03d}/audio")
         ep_audio.mkdir(parents=True, exist_ok=True)
         voice_map = voice_map or {}
@@ -258,7 +259,12 @@ def _project_file(project_id: int, rel_path: str) -> Path:
 
 
 def generate_project_audio(
-    project_id: int, series: dict, characters: dict, episodes: list[dict], api_key: str | None = None
+    project_id: int,
+    series: dict,
+    characters: dict,
+    episodes: list[dict],
+    api_key: str | None = None,
+    force_mock: bool = False,
 ) -> dict:
     """逐集生成配音/环境音（场景级 cue sheet），写入 audio-manifest.json。"""
     voice_notes = characters.get("voice_notes", {})
@@ -278,7 +284,7 @@ def generate_project_audio(
 
     with ThreadPoolExecutor(max_workers=min(3, settings.llm_max_workers)) as pool:
         futures = [
-            pool.submit(_generate_scene_audio, project_id, ep, scene, prompt, duration, api_key, voice_map)
+            pool.submit(_generate_scene_audio, project_id, ep, scene, prompt, duration, api_key, voice_map, force_mock)
             for ep, scene, prompt, duration in tasks
         ]
         results = [f.result() for f in futures]

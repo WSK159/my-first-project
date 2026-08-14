@@ -4,9 +4,15 @@
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
+
+# 测试隔离：无论本机 .env 配置如何，一律使用 mock 文本与零真实媒体
+os.environ["LLM_PROVIDER"] = "mock"
+os.environ["MINIMAX_API_KEY"] = ""
+os.environ["DEEPSEEK_API_KEY"] = ""
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
