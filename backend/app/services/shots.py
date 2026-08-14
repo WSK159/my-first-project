@@ -7,7 +7,7 @@ from ..config import ROOT_DIR
 from . import mock_content
 from .json_utils import dump_json, extract_json
 from .llm import complete
-from .project_store import to_markdown, write_text
+from .project_store import to_markdown, write_json, write_text
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def generate_shots(project_id: int, script: dict, characters: dict, episode: int
             raise RuntimeError(f"第{episode}集分镜提示词生成失败")
     rel = f"episodes/ep{episode:03d}/"
     write_text(project_id, rel + "video-prompts.md", to_markdown(f"第{episode}集 视频提示词", shots))
+    write_json(project_id, rel + "video-prompts.json", shots)
     en = _translate(shots)
     write_text(project_id, rel + "video-prompts-en.md", to_markdown(f"Episode {episode} Video Prompts", en))
     return shots
-

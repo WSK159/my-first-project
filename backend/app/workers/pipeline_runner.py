@@ -12,6 +12,7 @@ from ..services import images as images_svc
 from ..services import novel as novel_svc
 from ..services import series as series_svc
 from ..services import shots as shots_svc
+from ..services import videos as videos_svc
 from ..services.project_store import ensure_project_dirs
 
 logger = logging.getLogger(__name__)
@@ -52,13 +53,17 @@ def run_project_pipeline(project_id: int) -> None:
         _update(project_id, "episodes", 0.25)
         episodes = episodes_svc.generate_episodes(project_id, series, characters, episode_count, seconds)
 
-        _update(project_id, "shots", 0.65)
+        _update(project_id, "shots", 0.62)
+        shots_map: dict[int, dict] = {}
         for script in episodes:
-            shots_svc.generate_shots(project_id, script, characters, script["episode"])
+            ep = script.get("episode", 1)
+            shots_map[ep] = shots_svc.generate_shots(project_id, script, characters, ep)
 
         if settings.media_enabled or settings.mock_media:
-            _update(project_id, "images", 0.72)
+            _update(project_id, "images", 0.68)
             images_svc.generate_project_images(project_id, series, characters)
+            _update(project_id, "videos", 0.78)
+            videos_svc.generate_project_videos(project_id, episodes, shots_map)
 
         _update(project_id, "novel", 0.9)
         novel_svc.generate_novel(project_id, series, episodes)

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     seedance_resolution: str = "720p"
     seedance_ratio: str = "9:16"
     seedance_watermark: bool = False
+    seedance_generate_audio: bool = False  # 视觉优先：音频由 Seed Audio 阶段统一生成
     seedance_poll_interval: int = 5
     seedance_max_wait_minutes: int = 30
 

@@ -28,6 +28,8 @@ def main() -> int:
         ("characters/lead.png", root / "characters" / "lead.png"),
         ("cover.png", root / "cover.png"),
         ("scenes/scene01.png", root / "scenes" / "scene01.png"),
+        ("ep001/videos/clip-01/video.mp4", root / "episodes" / "ep001" / "videos" / "clip-01" / "video.mp4"),
+        ("ep001/videos/clip-01/last-frame.png", root / "episodes" / "ep001" / "videos" / "clip-01" / "last-frame.png"),
     ]
     failed = False
     for label, path in checks:
@@ -40,6 +42,12 @@ def main() -> int:
         magic_ok = png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
         print(f"{'PASS' if magic_ok else 'FAIL'}  PNG 魔数校验")
         failed = failed or not magic_ok
+
+    mp4 = root / "episodes" / "ep001" / "videos" / "clip-01" / "video.mp4"
+    if mp4.exists():
+        mp4_ok = mp4.read_bytes()[:12] == b"\x00\x00\x00\x18ftypmp42" or mp4.stat().st_size > 1000
+        print(f"{'PASS' if mp4_ok else 'FAIL'}  MP4 文件校验（{mp4.stat().st_size} B）")
+        failed = failed or not mp4_ok
 
     novel_path = root / "novel.md"
     novel_len = len(novel_path.read_text(encoding="utf-8")) if novel_path.exists() else 0

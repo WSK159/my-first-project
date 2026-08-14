@@ -173,10 +173,10 @@ def make_characters(series: dict) -> dict:
         },
         {
             "id": "ally",
-            "name": names["female"][1] if not is_female else names["male"][1],
+            "name": names["female"][1],
             "role": "盟友",
             "age": 24,
-            "gender": "女" if not is_female else "男",
+            "gender": "女",
             "desire": "帮助主角并找回自己的价值",
             "wound": "曾经被家族放弃",
             "leverage": "掌握关键情报网",
