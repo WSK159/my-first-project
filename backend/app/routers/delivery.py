@@ -39,6 +39,19 @@ def download_video(project_id: int, user: User = Depends(get_current_user), db: 
     return FileResponse(path, media_type="video/mp4", filename=path.name)
 
 
+@router.get("/{project_id}/video/{episode}")
+def download_episode_video(
+    project_id: int, episode: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    project = _get_owned_project(project_id, user, db)
+    if not project.video_ready:
+        raise HTTPException(status_code=404, detail="成片尚未生成")
+    path = project_dir(project_id) / "episodes" / f"ep{episode:03d}" / "final.mp4"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="该集成片缺失")
+    return FileResponse(path, media_type="video/mp4", filename=path.name)
+
+
 @router.get("/{project_id}/archive")
 def download_archive(project_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     project = _get_owned_project(project_id, user, db)

@@ -1,9 +1,13 @@
+import shutil
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Project, User
 from ..schemas import EstimateIn, EstimateOut, ProjectOut
+from ..services.project_store import project_dir
 from ..workers.pipeline_runner import start_pipeline
 from .auth import get_current_user
 
@@ -85,3 +89,16 @@ def get_project(project_id: int, user: User = Depends(get_current_user), db: Ses
     if project is None or project.owner_id != user.id:
         raise HTTPException(status_code=404, detail="项目不存在")
     return project
+
+
+@router.delete("/{project_id}")
+def delete_project(project_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    project = db.get(Project, project_id)
+    if project is None or project.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    data_dir = project_dir(project_id)
+    db.delete(project)
+    db.commit()
+    if data_dir.exists():
+        shutil.rmtree(data_dir)
+    return {"deleted": project_id}
