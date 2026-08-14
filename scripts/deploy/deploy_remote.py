@@ -37,11 +37,14 @@ def main() -> int:
         client.connect(args.host, username=args.user, password=password, timeout=30)
 
     commands = [
-        "which git docker docker-compose || true",
+        "which git docker || true",
+        "(docker compose version >/dev/null 2>&1 && echo COMPOSE_V2) || (docker-compose version >/dev/null 2>&1 && echo COMPOSE_V1) || echo NO_COMPOSE",
         f"cd /opt && (test -d my-first-project && cd my-first-project && git pull --ff-only || git clone {args.repo})",
         f"cd /opt/my-first-project && git checkout {args.branch} && git pull --ff-only",
-        "cd /opt/my-first-project && docker compose up -d --build",
-        "sleep 8 && curl -sf http://127.0.0.1/api/health && echo 'DEPLOY OK' || echo 'check manually'",
+        "cd /opt/my-first-project && (test -f .env || (cp .env.example .env && echo 'WARN: 已从 .env.example 创建 .env，请编辑填入真实密钥'))",
+        "cd /opt/my-first-project && (docker compose version >/dev/null 2>&1 && docker compose up -d --build || docker-compose up -d --build)",
+        "cd /opt/my-first-project && for i in $(seq 1 12); do curl -sf http://127.0.0.1/api/health && break || sleep 5; done",
+        "curl -sf http://127.0.0.1/api/health && echo 'DEPLOY OK' || echo 'check manually: docker compose logs backend'",
     ]
     for cmd in commands:
         print(f"$ {cmd}")
