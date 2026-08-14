@@ -37,7 +37,7 @@ def _mock_clip(path: Path, seconds: int, label: str, seed: int = 0) -> Path:
     cmd = [
         ffmpeg, "-y", "-loglevel", "error",
         "-f", "lavfi", "-i",
-        f"color=c={color}:s=720x1280:r=24:d={max(2, min(seconds, 8))}",
+        f"color=c={color}:s=720x1280:r=24:d={max(2, min(seconds, 15))}",
         "-vf",
         "drawbox=x=0:y=0:w=iw:h=ih:color=white@0.18:t=6",
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-pix_fmt", "yuv420p",

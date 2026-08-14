@@ -32,6 +32,9 @@ def main() -> int:
         ("ep001/videos/clip-01/last-frame.png", root / "episodes" / "ep001" / "videos" / "clip-01" / "last-frame.png"),
         ("ep001/audio/scene-01.wav", root / "episodes" / "ep001" / "audio" / "scene-01.wav"),
         ("audio-manifest.json", root / "audio-manifest.json"),
+        ("ep001/final.mp4", root / "episodes" / "ep001" / "final.mp4"),
+        ("ep001/episode.srt", root / "episodes" / "ep001" / "episode.srt"),
+        ("delivery zip", root / "delivery" / f"project-{project_id}.zip"),
     ]
     failed = False
     for label, path in checks:
@@ -56,6 +59,12 @@ def main() -> int:
         wav_ok = wav.read_bytes()[:4] == b"RIFF" and wav.stat().st_size > 1000
         print(f"{'PASS' if wav_ok else 'FAIL'}  WAV 文件校验（{wav.stat().st_size} B）")
         failed = failed or not wav_ok
+
+    final = root / "episodes" / "ep001" / "final.mp4"
+    if final.exists():
+        final_ok = final.stat().st_size > 100_000
+        print(f"{'PASS' if final_ok else 'FAIL'}  成片 final.mp4（{final.stat().st_size} B）")
+        failed = failed or not final_ok
 
     novel_path = root / "novel.md"
     novel_len = len(novel_path.read_text(encoding="utf-8")) if novel_path.exists() else 0

@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Project, User
+from ..services.project_store import project_dir
 from .auth import get_current_user
 
 router = APIRouter()
@@ -20,8 +22,10 @@ def download_novel(project_id: int, user: User = Depends(get_current_user), db: 
     project = _get_owned_project(project_id, user, db)
     if not project.novel_ready:
         raise HTTPException(status_code=404, detail="小说尚未生成")
-    # TODO(阶段1): 从项目数据目录读取 novel.md 返回
-    return {"detail": "阶段1实现"}
+    path = project_dir(project_id) / "novel.md"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="小说文件缺失")
+    return FileResponse(path, media_type="text/markdown; charset=utf-8", filename="novel.md")
 
 
 @router.get("/{project_id}/video")
@@ -29,8 +33,10 @@ def download_video(project_id: int, user: User = Depends(get_current_user), db: 
     project = _get_owned_project(project_id, user, db)
     if not project.video_ready:
         raise HTTPException(status_code=404, detail="成片尚未生成")
-    # TODO(阶段5): 从项目数据目录读取 final.mp4 返回
-    return {"detail": "阶段5实现"}
+    path = project_dir(project_id) / "episodes" / "ep001" / "final.mp4"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="成片文件缺失")
+    return FileResponse(path, media_type="video/mp4", filename=path.name)
 
 
 @router.get("/{project_id}/archive")
@@ -38,6 +44,7 @@ def download_archive(project_id: int, user: User = Depends(get_current_user), db
     project = _get_owned_project(project_id, user, db)
     if not (project.novel_ready and project.video_ready):
         raise HTTPException(status_code=404, detail="交付包尚未就绪")
-    # TODO(阶段5): 打包 zip 返回
-    return {"detail": "阶段5实现"}
-
+    path = project_dir(project_id) / "delivery" / f"project-{project_id}.zip"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="交付包文件缺失")
+    return FileResponse(path, media_type="application/zip", filename=path.name)

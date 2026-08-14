@@ -8,11 +8,14 @@ from ..db import SessionLocal
 from ..models import Project
 from ..services import characters as characters_svc
 from ..services import audio as audio_svc
+from ..services import assembly as assembly_svc
 from ..services import episodes as episodes_svc
+from ..services import delivery as delivery_svc
 from ..services import images as images_svc
 from ..services import novel as novel_svc
 from ..services import series as series_svc
 from ..services import shots as shots_svc
+from ..services import subtitles as subtitles_svc
 from ..services import videos as videos_svc
 from ..services.project_store import ensure_project_dirs
 
@@ -67,6 +70,14 @@ def run_project_pipeline(project_id: int) -> None:
             videos_svc.generate_project_videos(project_id, episodes, shots_map)
             _update(project_id, "audio", 0.86)
             audio_svc.generate_project_audio(project_id, series, characters, episodes)
+            _update(project_id, "assembly", 0.92)
+            for script in episodes:
+                ep = script.get("episode", 1)
+                assembled = assembly_svc.assemble_episode(project_id, ep)
+                subtitled = subtitles_svc.burn_subtitles(project_id, ep, assembled)
+                assembly_svc.finalize_episode(project_id, ep, subtitled)
+            _update(project_id, "delivery", 0.97)
+            delivery_svc.build_delivery_package(project_id)
 
         _update(project_id, "novel", 0.9)
         novel_svc.generate_novel(project_id, series, episodes)
@@ -75,6 +86,7 @@ def run_project_pipeline(project_id: int) -> None:
             project = db.get(Project, project_id)
             project.title = series.get("title", project.title) or project.title
             project.novel_ready = True
+            project.video_ready = True
             project.stage = "delivery"
             project.progress = 1.0
             project.status = "done"
