@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from app.config import settings  # noqa: E402
 from app.services import characters as characters_svc  # noqa: E402
 from app.services import episodes as episodes_svc  # noqa: E402
+from app.services import images as images_svc  # noqa: E402
 from app.services import novel as novel_svc  # noqa: E402
 from app.services import series as series_svc  # noqa: E402
 from app.services import shots as shots_svc  # noqa: E402
@@ -19,22 +20,26 @@ from app.services.project_store import ensure_project_dirs, project_dir  # noqa:
 
 def run(project_id: int, idea: str, random_mode: bool, genre: str, episodes: int, seconds: int) -> Path:
     ensure_project_dirs(project_id)
-    print(f"[1/5] 系列设定 … provider={settings.llm_provider}")
+    print(f"[1/6] 系列设定 … provider={settings.llm_provider}")
     series = series_svc.generate_series(project_id, idea, random_mode, genre, episodes)
     print(f"      标题：{series.get('title')} 题材：{series.get('genre')}")
 
-    print("[2/5] 角色设定 …")
+    print("[2/6] 角色设定 …")
     characters = characters_svc.generate_characters(project_id, series)
     print(f"      角色：{', '.join(c['name'] for c in characters['characters'])}")
 
-    print(f"[3/5] 分集剧本（{episodes} 集，并发 {settings.llm_max_workers}）…")
+    print(f"[3/6] 分集剧本（{episodes} 集，并发 {settings.llm_max_workers}）…")
     episode_scripts = episodes_svc.generate_episodes(project_id, series, characters, episodes, seconds)
 
-    print("[4/5] 分镜/视频提示词 …")
+    print("[4/6] 分镜/视频提示词 …")
     for script in episode_scripts:
         shots_svc.generate_shots(project_id, script, characters, script["episode"])
 
-    print("[5/5] 完整小说 …")
+    if settings.media_enabled or settings.mock_media:
+        print("[5/6] 视觉资产（角色/场景/封面）…")
+        images_svc.generate_project_images(project_id, series, characters)
+
+    print("[6/6] 完整小说 …")
     novel_svc.generate_novel(project_id, series, episode_scripts)
 
     root = project_dir(project_id)
@@ -60,4 +65,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

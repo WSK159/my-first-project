@@ -25,12 +25,21 @@ def main() -> int:
         ("ep001/script.json", root / "episodes" / "ep001" / "script.json"),
         ("ep001/video-prompts.md", root / "episodes" / "ep001" / "video-prompts.md"),
         ("ep002/script.json", root / "episodes" / "ep002" / "script.json"),
+        ("characters/lead.png", root / "characters" / "lead.png"),
+        ("cover.png", root / "cover.png"),
+        ("scenes/scene01.png", root / "scenes" / "scene01.png"),
     ]
     failed = False
     for label, path in checks:
         ok = path.exists() and path.stat().st_size > 0
         print(f"{'PASS' if ok else 'FAIL'}  {label} ({path.stat().st_size if path.exists() else 0} B)")
         failed = failed or not ok
+
+    png = root / "characters" / "lead.png"
+    if png.exists():
+        magic_ok = png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+        print(f"{'PASS' if magic_ok else 'FAIL'}  PNG 魔数校验")
+        failed = failed or not magic_ok
 
     novel_path = root / "novel.md"
     novel_len = len(novel_path.read_text(encoding="utf-8")) if novel_path.exists() else 0

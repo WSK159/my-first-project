@@ -9,7 +9,7 @@
 - episodes.py     分集剧本（完成）
 - shots.py        分镜提示词（完成）
 - novel.py        完整小说（完成）
-- images.py       Seedream 生图（阶段2）
+- images.py       Seedream 生图（完成：角色/场景/封面 + mock 占位）
 - videos.py       Seedance 生视频（阶段3）
 - audio.py        Seed Audio 配音/音乐（阶段4）
 - assembly.py     FFmpeg 合成（阶段5）

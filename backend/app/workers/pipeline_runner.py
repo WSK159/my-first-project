@@ -8,6 +8,7 @@ from ..db import SessionLocal
 from ..models import Project
 from ..services import characters as characters_svc
 from ..services import episodes as episodes_svc
+from ..services import images as images_svc
 from ..services import novel as novel_svc
 from ..services import series as series_svc
 from ..services import shots as shots_svc
@@ -54,6 +55,10 @@ def run_project_pipeline(project_id: int) -> None:
         _update(project_id, "shots", 0.65)
         for script in episodes:
             shots_svc.generate_shots(project_id, script, characters, script["episode"])
+
+        if settings.media_enabled or settings.mock_media:
+            _update(project_id, "images", 0.72)
+            images_svc.generate_project_images(project_id, series, characters)
 
         _update(project_id, "novel", 0.9)
         novel_svc.generate_novel(project_id, series, episodes)
