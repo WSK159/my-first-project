@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 环境与密钥
+.env
+.env.local
+*.env
+!*.env.example
+
+# 运行时数据与媒体产物
+backend/data/
+data/
+outputs/
+episodes/
+series/
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.wav
+*.mp3
+*.png
+*.jpg
+*.jpeg
+*.webp
+!**/.gitkeep
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+

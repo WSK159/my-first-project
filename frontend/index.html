@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI短剧工坊</title>
+  <style>
+    body { font-family: system-ui, "Microsoft YaHei", sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #222; }
+    textarea { width: 100%; min-height: 80px; padding: 10px; font-size: 15px; box-sizing: border-box; }
+    button { padding: 10px 18px; font-size: 15px; cursor: pointer; }
+    .row { display: flex; gap: 12px; margin: 10px 0; align-items: center; flex-wrap: wrap; }
+    .progress { background: #eee; height: 10px; border-radius: 5px; overflow: hidden; margin: 8px 0; }
+    .progress > div { background: #2f7dff; height: 100%; width: 0; transition: width .5s; }
+    code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>AI短剧工坊</h1>
+  <p>一句话或完全随机，一键生成可投稿的完整短剧（小说 + 人设图 + 分集剧本 + 视频 + 配音 + 音乐）。</p>
+
+  <label>一句话灵感</label>
+  <textarea id="idea" placeholder="例如：被退婚的豪门千金十年后带着天才儿子回国复仇……"></textarea>
+
+  <div class="row">
+    <button id="btnRandom">🎲 完全随机</button>
+    <label>集数 <input id="episodes" type="number" value="1" min="1" max="20" style="width:60px" /></label>
+    <label>单集秒数 <input id="seconds" type="number" value="60" min="15" max="180" style="width:70px" /></label>
+    <label>档位
+      <select id="tier">
+        <option value="mock">mock（免费试跑）</option>
+        <option value="fast">fast（低成本）</option>
+        <option value="quality">quality（高质量）</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="row">
+    <button id="btnCreate">⚡ 一键生成</button>
+  </div>
+
+  <div id="tokenBox" style="display:none; margin:10px 0;">
+    <label>Token（未登录时先注册）</label>
+    <input id="token" style="width:100%; box-sizing:border-box; padding:6px;" />
+  </div>
+  <div class="row">
+    <button id="btnRegister">注册/登录测试号</button>
+  </div>
+
+  <h2>进度</h2>
+  <div id="status">尚未开始</div>
+  <div class="progress"><div id="bar"></div></div>
+  <pre id="log" style="background:#fafafa; padding:10px; white-space:pre-wrap;"></pre>
+
+  <script>
+    const API = "http://127.0.0.1:8000";
+    let token = localStorage.getItem("token") || "";
+    let current = null;
+
+    async function api(path, opts = {}) {
+      const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+      if (token) headers.Authorization = "Bearer " + token;
+      const r = await fetch(API + path, { ...opts, headers });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error((data && data.detail) || r.statusText);
+      return data;
+    }
+
+    document.getElementById("btnRegister").onclick = async () => {
+      const u = "test" + Math.floor(Math.random() * 100000);
+      const data = await api("/api/auth/register", { method: "POST", body: JSON.stringify({ username: u, password: "test123456" }) });
+      token = data.access_token;
+      localStorage.setItem("token", token);
+      document.getElementById("token").value = token;
+      document.getElementById("status").textContent = "已注册：" + u;
+    };
+
+    document.getElementById("btnRandom").onclick = () => {
+      document.getElementById("idea").value = "";
+      document.getElementById("status").textContent = "已切换随机模式（提交时生效）";
+    };
+
+    document.getElementById("btnCreate").onclick = async () => {
+      const body = {
+        idea: document.getElementById("idea").value,
+        random_mode: !document.getElementById("idea").value.trim(),
+        episode_count: +document.getElementById("episodes").value,
+        seconds_per_episode: +document.getElementById("seconds").value,
+        video_tier: document.getElementById("tier").value,
+      };
+      current = await api("/api/projects", { method: "POST", body: JSON.stringify(body) });
+      document.getElementById("status").textContent = "项目已创建 #" + current.id + "，状态：" + current.status;
+      poll();
+    };
+
+    async function poll() {
+      if (!current) return;
+      const p = await api("/api/projects/" + current.id);
+      const log = document.getElementById("log");
+      log.textContent = "stage: " + p.stage + "\nprogress: " + (p.progress * 100).toFixed(0) + "%\nerror: " + p.error;
+      document.getElementById("bar").style.width = (p.progress * 100).toFixed(0) + "%";
+      if (p.status === "done" || p.status === "failed") {
+        document.getElementById("status").textContent = "完成：" + p.status;
+      } else {
+        setTimeout(poll, 3000);
+      }
+    }
+  </script>
+</body>
+</html>
+
