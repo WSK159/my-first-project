@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.config import settings  # noqa: E402
+from app.services import audio as audio_svc  # noqa: E402
 from app.services import characters as characters_svc  # noqa: E402
 from app.services import episodes as episodes_svc  # noqa: E402
 from app.services import images as images_svc  # noqa: E402
@@ -39,12 +40,14 @@ def run(project_id: int, idea: str, random_mode: bool, genre: str, episodes: int
         shots_map[ep] = shots_svc.generate_shots(project_id, script, characters, ep)
 
     if settings.media_enabled or settings.mock_media:
-        print("[5/7] 视觉资产（角色/场景/封面）…")
+        print("[5/8] 视觉资产（角色/场景/封面）…")
         images_svc.generate_project_images(project_id, series, characters)
-        print("[6/7] 视频片段（Seedance/mock）…")
+        print("[6/8] 视频片段（Seedance/mock）…")
         videos_svc.generate_project_videos(project_id, episode_scripts, shots_map)
+        print("[7/8] 配音与音乐（Seed Audio/mock）…")
+        audio_svc.generate_project_audio(project_id, series, characters, episode_scripts)
 
-    print("[7/7] 完整小说 …")
+    print("[8/8] 完整小说 …")
     novel_svc.generate_novel(project_id, series, episode_scripts)
 
     root = project_dir(project_id)

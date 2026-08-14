@@ -7,6 +7,7 @@ from ..config import settings
 from ..db import SessionLocal
 from ..models import Project
 from ..services import characters as characters_svc
+from ..services import audio as audio_svc
 from ..services import episodes as episodes_svc
 from ..services import images as images_svc
 from ..services import novel as novel_svc
@@ -64,6 +65,8 @@ def run_project_pipeline(project_id: int) -> None:
             images_svc.generate_project_images(project_id, series, characters)
             _update(project_id, "videos", 0.78)
             videos_svc.generate_project_videos(project_id, episodes, shots_map)
+            _update(project_id, "audio", 0.86)
+            audio_svc.generate_project_audio(project_id, series, characters, episodes)
 
         _update(project_id, "novel", 0.9)
         novel_svc.generate_novel(project_id, series, episodes)
