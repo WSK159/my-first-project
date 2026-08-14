@@ -1,0 +1,45 @@
+"""阶段1验证：mock 档完整跑通 LLM 内容流水线并检查产物。"""
+
+import random
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "backend"))
+
+from app.config import settings  # noqa: E402
+from pipeline.cli import run  # noqa: E402
+
+
+def main() -> int:
+    assert settings.llm_provider == "mock", "测试需在 mock 档运行"
+    project_id = random.randint(800000, 899999)
+    root = run(project_id, idea="被夺走一切的千金十年后携子回国复仇", random_mode=False, genre="", episodes=2, seconds=60)
+
+    checks = [
+        ("series.json", root / "series.json"),
+        ("series.md", root / "series.md"),
+        ("characters.json", root / "characters.json"),
+        ("novel.md", root / "novel.md"),
+        ("ep001/script.json", root / "episodes" / "ep001" / "script.json"),
+        ("ep001/video-prompts.md", root / "episodes" / "ep001" / "video-prompts.md"),
+        ("ep002/script.json", root / "episodes" / "ep002" / "script.json"),
+    ]
+    failed = False
+    for label, path in checks:
+        ok = path.exists() and path.stat().st_size > 0
+        print(f"{'PASS' if ok else 'FAIL'}  {label} ({path.stat().st_size if path.exists() else 0} B)")
+        failed = failed or not ok
+
+    novel_path = root / "novel.md"
+    novel_len = len(novel_path.read_text(encoding="utf-8")) if novel_path.exists() else 0
+    print(f"novel.md 字数：{novel_len}")
+    if novel_len < 200:
+        failed = True
+    print("阶段1 mock 流水线：" + ("通过" if not failed else "存在失败项"))
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

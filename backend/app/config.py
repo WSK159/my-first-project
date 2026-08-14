@@ -1,11 +1,18 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 仓库根目录：backend/app/config.py -> parents[0]=app, [1]=backend, [2]=repo root
+ROOT_DIR = Path(__file__).resolve().parents[2]
+DATA_DIR = ROOT_DIR / "backend" / "data"
+PROJECTS_DIR = DATA_DIR / "projects"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "AI短剧工坊"
-    database_url: str = "sqlite:///./data/platform.db"
+    database_url: str = f"sqlite:///{(DATA_DIR / 'platform.db').as_posix()}"
     secret_key: str = "dev-only-change-me-0123456789abcdef"
     jwt_expire_minutes: int = 1440
 
@@ -48,6 +55,10 @@ class Settings(BaseSettings):
     platform_markup: float = 1.5
     signup_bonus_cents: int = 1000
 
+    # 流水线
+    llm_max_workers: int = 3          # 分集生成并发上限
+    media_enabled: bool = False       # 阶段2+ 开启媒体生成后置 True
+    mock_media: bool = True           # mock 档位用 ffmpeg 生成占位媒体
+
 
 settings = Settings()
-

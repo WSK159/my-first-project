@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import Project, User
 from ..schemas import EstimateIn, EstimateOut, ProjectOut
+from ..workers.pipeline_runner import start_pipeline
 from .auth import get_current_user
 
 router = APIRouter()
@@ -62,7 +63,7 @@ def create_project(data: EstimateIn, user: User = Depends(get_current_user), db:
     db.add(project)
     db.commit()
     db.refresh(project)
-    # TODO(阶段1+): 提交到任务队列，由 workers/pipeline_runner.py 执行
+    start_pipeline(project.id)
     return project
 
 
@@ -84,4 +85,3 @@ def get_project(project_id: int, user: User = Depends(get_current_user), db: Ses
     if project is None or project.owner_id != user.id:
         raise HTTPException(status_code=404, detail="项目不存在")
     return project
-

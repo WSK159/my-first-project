@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -38,7 +38,10 @@ def create_token(user_id: int) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm="HS256")
 
 
-def get_current_user(token: str, db: Session = Depends(get_db)) -> User:
+def get_current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> User:
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="缺少 Bearer 令牌")
+    token = authorization[len("Bearer ") :]
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
     except jwt.PyJWTError:
@@ -75,4 +78,3 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
     if user is None or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     return TokenOut(access_token=create_token(user.id), balance_cents=user.balance_cents)
-
