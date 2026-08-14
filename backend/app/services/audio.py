@@ -4,6 +4,7 @@ import base64
 import logging
 import math
 import struct
+import threading
 import wave
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -14,6 +15,7 @@ from ..config import settings
 from .project_store import read_json, write_json
 
 logger = logging.getLogger(__name__)
+_manifest_lock = threading.Lock()
 
 
 def _mock_wav(path: Path, seconds: float, freq: float = 440.0, amp: float = 0.22) -> Path:
@@ -174,10 +176,11 @@ def generate_project_audio(
             for ep, scene, prompt, duration in tasks
         ]
         results = [f.result() for f in futures]
-    manifest: dict[str, list] = read_json(project_id, "audio-manifest.json")
-    if not isinstance(manifest, dict):
-        manifest = {}
-    for (ep, _scene, _prompt, _dur), result in zip(tasks, results):
-        manifest.setdefault(str(ep), []).append(result)
+    with _manifest_lock:
+        manifest: dict[str, list] = read_json(project_id, "audio-manifest.json")
+        if not isinstance(manifest, dict):
+            manifest = {}
+        for (ep, _scene, _prompt, _dur), result in zip(tasks, results):
+            manifest.setdefault(str(ep), []).append(result)
     write_json(project_id, "audio-manifest.json", manifest)
     return manifest

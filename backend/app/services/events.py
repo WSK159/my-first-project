@@ -1,11 +1,14 @@
 """项目事件日志：持久化追加式日志，供 SSE 实时进度与断点续跑使用。"""
 
 import json
+import threading
 import time
 from pathlib import Path
 
 from ..config import settings
 from .project_store import project_dir
+
+_write_lock = threading.Lock()
 
 
 def _log_path(project_id: int) -> Path:
@@ -17,8 +20,9 @@ def append_event(project_id: int, event: dict) -> None:
     row = {"ts": time.time(), **event}
     path = _log_path(project_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    with _write_lock:
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
     # 防无限增长：超过上限时截断
     lines = path.read_text(encoding="utf-8").splitlines()
     if len(lines) > settings.event_log_max_lines:

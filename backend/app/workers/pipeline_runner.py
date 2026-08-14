@@ -14,6 +14,7 @@ import json
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from ..config import settings
@@ -218,6 +219,23 @@ def _stage_episode(project_id: int, episode: int, step: str, marker_fn, fn, prog
         return False
 
 
+def _run_parallel(project_id: int, steps: list[tuple[int, callable]]) -> int:
+    """并行执行各集独立步骤（受 llm_max_workers 限制），返回成功数。
+    单集失败已在 _stage_episode 内部记录，不抛给其他集。"""
+    if not steps:
+        return 0
+    ok = 0
+    with ThreadPoolExecutor(max_workers=settings.llm_max_workers) as pool:
+        futures = {pool.submit(fn, ep): ep for ep, fn in steps}
+        for fut in as_completed(futures):
+            try:
+                if fut.result():
+                    ok += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("并行步骤异常（ep=%s）：%s", futures[fut], exc)
+    return ok
+
+
 # ---------- 主流程 ----------
 
 
@@ -343,6 +361,7 @@ def _run_inner(project_id: int) -> None:
 
         # 8) 视频（按集）
         _update(project_id, "videos", 0.58)
+        video_steps = []
         for ep in range(1, episode_count + 1):
             script = script_map.get(ep)
             shots = shots_map.get(ep)
@@ -370,15 +389,22 @@ def _run_inner(project_id: int) -> None:
                             seconds_sum += 10
                 return {"seconds": seconds_sum, "clips": len(clips), "provider": "seedance" if api_key else "mock", "tier": tier}
 
-            ok = _stage_episode(
-                project_id, ep, "videos",
-                lambda e=ep: _episode_done(project_id, e, "videos"),
-                video_fn,
-                0.62,
+            video_steps.append(
+                (
+                    ep,
+                    lambda e=ep, vf=video_fn: _stage_episode(
+                        project_id, e, "videos",
+                        lambda ee=e: _episode_done(project_id, ee, "videos"),
+                        lambda ee=e: vf(ee),
+                        0.62,
+                    ),
+                )
             )
+        _run_parallel(project_id, video_steps)
 
         # 9) 音频（按集）
         _update(project_id, "audio", 0.72)
+        audio_steps = []
         for ep in range(1, episode_count + 1):
             script = script_map.get(ep)
             if script is None:
@@ -392,15 +418,22 @@ def _run_inner(project_id: int) -> None:
                 seconds_sum = sum(float(r.get("duration", 0)) for r in rows)
                 return {"seconds": seconds_sum, "provider": "seed-audio" if audio_key else "mock"}
 
-            ok = _stage_episode(
-                project_id, ep, "audio",
-                lambda e=ep: _episode_done(project_id, e, "audio"),
-                audio_fn,
-                0.76,
+            audio_steps.append(
+                (
+                    ep,
+                    lambda e=ep, af=audio_fn: _stage_episode(
+                        project_id, e, "audio",
+                        lambda ee=e: _episode_done(project_id, ee, "audio"),
+                        lambda ee=e: af(ee),
+                        0.76,
+                    ),
+                )
             )
+        _run_parallel(project_id, audio_steps)
 
         # 10) 合成与字幕（按集）
         _update(project_id, "assembly", 0.84)
+        assembly_steps = []
         for ep in range(1, episode_count + 1):
             if not _episode_done(project_id, ep, "videos"):
                 continue
@@ -413,12 +446,18 @@ def _run_inner(project_id: int) -> None:
                 final = assembly_svc.finalize_episode(project_id, e, subtitled)
                 return {"final": str(final)}
 
-            ok = _stage_episode(
-                project_id, ep, "assembly",
-                lambda e=ep: _episode_done(project_id, e, "assembly"),
-                assembly_fn,
-                0.9,
+            assembly_steps.append(
+                (
+                    ep,
+                    lambda e=ep, afn=assembly_fn: _stage_episode(
+                        project_id, e, "assembly",
+                        lambda ee=e: _episode_done(project_id, ee, "assembly"),
+                        lambda ee=e: afn(ee),
+                        0.9,
+                    ),
+                )
             )
+        _run_parallel(project_id, assembly_steps)
 
     # 11) 完整小说
     if not _artifact(project_dir(project_id) / "novel.md"):

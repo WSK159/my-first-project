@@ -3,6 +3,7 @@
 import logging
 import shutil
 import subprocess
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -13,6 +14,7 @@ from ..config import settings
 from .project_store import read_json, write_json
 
 logger = logging.getLogger(__name__)
+_manifest_lock = threading.Lock()
 
 FFMPEG_CANDIDATES = [
     r"C:\Users\wangshike\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0-full_build\bin\ffmpeg.exe",
@@ -233,9 +235,7 @@ def generate_project_videos(
             duration = max(4, min(int(clip.get("duration_hint", 10)), 15))
             tasks.append((ep, clip_no, _clip_prompt(clip, continuity, script), duration, None))
 
-    manifest = read_json(project_id, "videos-manifest.json")
-    if not isinstance(manifest, dict) or "episodes" not in manifest:
-        manifest = {"episodes": {}}
+    results: list[dict] = []
     if client.available:
         # 真实模式：逐段生成，上一段尾帧作为下一段首帧（跨集重置）
         last_frame: Path | None = None
@@ -247,13 +247,19 @@ def generate_project_videos(
             result = _generate_one_clip(project_id, ep, clip_no, prompt, duration, last_frame, api_key)
             if result["last_frame"]:
                 last_frame = _project_file(project_id, result["last_frame"])
-            manifest["episodes"].setdefault(str(ep), []).append(result)
+            results.append(result)
     else:
         with ThreadPoolExecutor(max_workers=min(3, settings.llm_max_workers)) as pool:
             futures = [pool.submit(_generate_one_clip, project_id, ep, clip_no, prompt, duration, None, api_key) for ep, clip_no, prompt, duration, _ in tasks]
             for f in futures:
-                result = f.result()
-                manifest["episodes"].setdefault(str(result["episode"]), []).append(result)
+                results.append(f.result())
 
+    # 原子合并清单（支持多线程按集并行生成）
+    with _manifest_lock:
+        manifest = read_json(project_id, "videos-manifest.json")
+        if not isinstance(manifest, dict) or "episodes" not in manifest:
+            manifest = {"episodes": {}}
+        for result in results:
+            manifest["episodes"].setdefault(str(result["episode"]), []).append(result)
     write_json(project_id, "videos-manifest.json", manifest)
     return manifest
