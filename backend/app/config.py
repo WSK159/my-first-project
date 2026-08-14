@@ -67,5 +67,11 @@ class Settings(BaseSettings):
     event_log_max_lines: int = 2000   # 事件日志保留行数
     collection_enabled: bool = True   # 是否允许生成全剧合集
 
+    # 火山资源包预检（可选：用 IAM AK/SK 查询套餐余额）
+    volc_access_key: str = ""
+    volc_secret_key: str = ""
+    volc_region: str = "cn-beijing"
+    seedance_tokens_per_second: float = 800.0  # Seedance fast 720p 粗略 token/秒（可按实际校准）
+
 
 settings = Settings()

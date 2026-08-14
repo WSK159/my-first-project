@@ -53,3 +53,4 @@ class EstimateOut(BaseModel):
     balance_cents: int
     sufficient: bool
     detail: dict
+    quota: dict | None = None

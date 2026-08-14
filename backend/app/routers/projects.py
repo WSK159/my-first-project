@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import shutil
 from pathlib import Path
 
@@ -13,10 +14,12 @@ from ..schemas import EstimateIn, EstimateOut, ProjectOut
 from ..services import events
 from ..services.assembly import probe_duration
 from ..services.project_store import project_dir
+from ..services.resource_query import check_seedance_quota, estimate_video_tokens
 from ..workers.pipeline_runner import start_pipeline
 from .auth import get_current_user
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 THEME_TEMPLATES = [
     {
@@ -138,11 +141,19 @@ def estimate_cost(data: EstimateIn, balance_cents: int) -> tuple[int, dict]:
 @router.post("/estimate", response_model=EstimateOut)
 def estimate(data: EstimateIn, user: User = Depends(get_current_user)):
     frozen, detail = estimate_cost(data, user.balance_cents)
+    quota = None
+    if data.video_tier != "mock" and frozen > 0:
+        try:
+            seconds = data.episode_count * data.seconds_per_episode
+            quota = check_seedance_quota(estimate_video_tokens(seconds))
+        except Exception as exc:  # noqa: BLE001 预检失败不阻塞估算
+            quota = {"available": None, "ok": None, "error": str(exc)}
     return EstimateOut(
         frozen_cents=frozen,
         balance_cents=user.balance_cents,
         sufficient=user.balance_cents >= frozen,
         detail=detail,
+        quota=quota,
     )
 
 
@@ -151,6 +162,22 @@ def create_project(data: EstimateIn, user: User = Depends(get_current_user), db:
     frozen, _ = estimate_cost(data, user.balance_cents)
     if user.balance_cents < frozen:
         raise HTTPException(status_code=402, detail="余额不足，请先充值")
+    if data.video_tier != "mock" and frozen > 0:
+        try:
+            seconds = data.episode_count * data.seconds_per_episode
+            quota = check_seedance_quota(estimate_video_tokens(seconds))
+            if quota.get("available") is True and quota.get("ok") is False:
+                raise HTTPException(
+                    status_code=402,
+                    detail=(
+                        f"火山 Seedance 套餐余量不足：还需 {quota.get('deficit_tokens', 0):.0f} tokens。"
+                        "请先购买资源包或改用 mock 档。"
+                    ),
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001 预检失败仅告警，不阻塞（开发/未配置场景）
+            logger.warning("资源包预检失败：%s", exc)
     user.balance_cents -= frozen
     project = Project(
         owner_id=user.id,

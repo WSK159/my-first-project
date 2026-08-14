@@ -42,4 +42,7 @@ export const api = {
   collectionUrl: (id) => `/api/delivery/${id}/collection`,
   metadataUrl: (id) => `/api/delivery/${id}/metadata`,
   eventsUrl: (id) => `/api/projects/${id}/events?token=${encodeURIComponent(state.token)}`,
+  keysList: () => request("/keys"),
+  saveKey: (provider, apiKey) => request("/keys", { method: "POST", body: JSON.stringify({ provider, api_key: apiKey }) }),
+  deleteKey: (provider) => request(`/keys/${provider}`, { method: "DELETE" }),
 };

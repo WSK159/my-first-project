@@ -358,7 +358,16 @@ def _run_inner(project_id: int) -> None:
                     project_id, [s], {e: sh}, continuity, api_key=api_key
                 )
                 clips = manifest.get("episodes", {}).get(str(e), [])
-                seconds_sum = sum(max(4, min(int(c.get("duration_hint", 10)), 15)) for c in sh.get("clips", []))
+                seconds_sum = 0
+                for c in clips:
+                    video = project_dir(project_id) / c["video"]
+                    if video.exists():
+                        try:
+                            from ..services.assembly import probe_duration
+
+                            seconds_sum += int(probe_duration(video))
+                        except Exception:  # noqa: BLE001
+                            seconds_sum += 10
                 return {"seconds": seconds_sum, "clips": len(clips), "provider": "seedance" if api_key else "mock", "tier": tier}
 
             ok = _stage_episode(

@@ -25,6 +25,7 @@
 
     <template v-else>
       <GeneratePanel />
+      <KeyManager />
 
       <section class="panel glass" style="margin-top: 22px;">
         <h2>🗂️ 任务中心（我的项目）</h2>
@@ -43,6 +44,7 @@ import { onMounted, onUnmounted, ref } from "vue";
 import { api, state } from "../api";
 import AuthPanel from "../components/AuthPanel.vue";
 import GeneratePanel from "../components/GeneratePanel.vue";
+import KeyManager from "../components/KeyManager.vue";
 import ProjectCard from "../components/ProjectCard.vue";
 
 const projects = ref([]);

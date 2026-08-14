@@ -49,6 +49,9 @@
         约 {{ estimateMinutes }} 分钟出片 · 共 {{ totalMinutes }} 分钟正片
       </span>
       <span v-if="cost && cost > state.balance" class="cost-warn">⚠ 余额不足，请充值或改选 mock 档</span>
+      <span v-if="quota && quota.available === true && quota.ok === false" class="cost-warn">
+        ⚠ 火山 Seedance 套餐余量不足（缺 {{ Math.round(quota.deficit_tokens) }} tokens）
+      </span>
     </div>
     <button class="btn-primary" :disabled="busy" @click="create">
       {{ busy ? "创建中…" : "🎬 开始一键生成" }}
@@ -75,6 +78,7 @@ const error = ref("");
 const busy = ref(false);
 const templates = ref([]);
 const selected = ref("");
+const quota = ref(null);
 
 const totalMinutes = computed(() => Math.round((episodes.value * seconds.value) / 60));
 const estimateMinutes = computed(() => {
@@ -99,6 +103,7 @@ function randomize() {
   idea.value = "";
   selected.value = "";
   cost.value = 0;
+  quota.value = null;
 }
 
 function applyTemplate(t) {
@@ -108,6 +113,7 @@ function applyTemplate(t) {
   seconds.value = t.seconds_per_episode;
   tier.value = t.tier || "fast";
   cost.value = 0;
+  quota.value = null;
 }
 
 async function estimate() {
@@ -115,6 +121,7 @@ async function estimate() {
   try {
     const data = await api.estimate(payload());
     cost.value = data.frozen_cents;
+    quota.value = data.quota || null;
   } catch (e) {
     error.value = e.message;
   }

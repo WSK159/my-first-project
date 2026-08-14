@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db import init_db
-from .routers import auth, billing, delivery, projects
+from .routers import auth, billing, delivery, keys, projects
 
 init_db()
 
@@ -21,6 +21,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(delivery.router, prefix="/api/delivery", tags=["delivery"])
 app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
+app.include_router(keys.router, prefix="/api/keys", tags=["keys"])
 
 
 @app.on_event("startup")
