@@ -4,8 +4,8 @@ import logging
 import subprocess
 from pathlib import Path
 
-from .audio import build_audio_plan
 from ..config import settings
+from .audio import build_audio_plan
 from .project_store import project_dir, read_json
 from .videos import _find_ffmpeg
 
@@ -38,8 +38,6 @@ def build_srt(project_id: int, episode: int) -> Path:
             blocks.append(f"{idx}\n{_fmt_ts(start)} --> {_fmt_ts(end)}\n{d['speaker']}：{d['line']}\n")
             idx += 1
     srt = "\n".join(blocks)
-    if settings.ai_subtitle_label and blocks:
-        srt = f"0\n00:00:00,000 --> 00:00:02,000\nAI 生成内容\n\n" + srt
     path = project_dir(project_id) / "episodes" / f"ep{episode:03d}" / "episode.srt"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(srt, encoding="utf-8")
@@ -52,10 +50,22 @@ def burn_subtitles(project_id: int, episode: int, source: Path) -> Path:
     ep_dir = project_dir(project_id) / "episodes" / f"ep{episode:03d}"
     srt = build_srt(project_id, episode)
     output = ep_dir / "final-subtitled.mp4"
+    filters = [f"subtitles={srt.name}:force_style='FontSize=20,FontName=Noto Sans CJK SC,MarginV=64'"]
+    if settings.ai_subtitle_label:
+        font = _find_cjk_font()
+        if font:
+            font_esc = font.replace("\\", "/").replace(":", "\\:")
+            filters.insert(0, (
+                f"drawtext=text='AI 生成内容':x=(w-text_w)/2:y=h-th-140:"
+                f"fontsize=26:fontcolor=white:borderw=2:bordercolor=black:"
+                f"fontfile='{font_esc}':enable='between(t,0,2)'"
+            ))
+        else:
+            logger.warning("未找到中文字体，跳过片头 AI 标识绘制")
     cmd = [
         ffmpeg, "-y", "-loglevel", "error",
         "-i", str(source),
-        "-vf", f"subtitles={srt.name}:force_style='FontSize=20,FontName=Microsoft YaHei,MarginV=64'",
+        "-vf", ",".join(filters),
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
         "-c:a", "copy", str(output),
     ]
@@ -65,3 +75,20 @@ def burn_subtitles(project_id: int, episode: int, source: Path) -> Path:
     except (subprocess.CalledProcessError, RuntimeError) as exc:
         logger.warning("字幕烧录失败，回退无字幕版本：%s", getattr(exc, "stderr", exc))
         return source
+
+
+def _find_cjk_font() -> str:
+    """按平台查找中文字体（Windows 开发机 / Debian Noto CJK）。"""
+    candidates = [
+        r"C:\Windows\Fonts\msyh.ttc",
+        r"C:\Windows\Fonts\simhei.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    ]
+    from pathlib import Path
+
+    for cand in candidates:
+        if Path(cand).exists():
+            return cand
+    return ""

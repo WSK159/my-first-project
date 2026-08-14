@@ -40,4 +40,4 @@
 ffmpeg -i final.mp4 -vf "scale=1080:1920:flags=lanczos" -c:v libx264 -preset slow -crf 18 -c:a aac final-1080.mp4
 ```
 
-- `metadata.json` 已含 `ai_generated: true` 与合规建议；字幕已标注「AI 生成内容」。
+- `metadata.json` 已含 `ai_generated: true` 与合规建议；成片片头 2 秒画面标注「AI 生成内容」。
