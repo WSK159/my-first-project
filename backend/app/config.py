@@ -27,6 +27,17 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
 
+    # MiniMax（文本/生图/生视频/TTS 全能力，CN 端点）
+    minimax_api_key: str = ""
+    minimax_base_url: str = "https://api.minimaxi.com"
+    minimax_chat_model: str = "MiniMax-Text-01"
+    minimax_image_model: str = "image-01"
+    minimax_video_model: str = "MiniMax-H3"
+    minimax_video_resolution: str = "768P"  # 768P | 2K
+    minimax_tts_model: str = "speech-02-hd"
+    minimax_tts_voice_female: str = "female-shaonv"
+    minimax_tts_voice_male: str = "male-qn-jingying"
+
     # Seedream
     seedream_api_key: str = ""
     seedream_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"

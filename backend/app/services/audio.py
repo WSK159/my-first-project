@@ -4,6 +4,7 @@ import base64
 import logging
 import math
 import struct
+import subprocess
 import threading
 import wave
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +14,7 @@ import httpx
 
 from ..config import settings
 from .project_store import read_json, write_json
+from .videos import _find_ffmpeg
 
 logger = logging.getLogger(__name__)
 _manifest_lock = threading.Lock()
@@ -90,6 +92,46 @@ class SeedAudioClient:
         }
 
 
+class MiniMaxTTSClient:
+    """MiniMax speech-02-hd TTS 客户端（单角色单次合成）。"""
+
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key or settings.minimax_api_key
+        self.base_url = settings.minimax_base_url.rstrip("/")
+        self.model = settings.minimax_tts_model
+
+    @property
+    def available(self) -> bool:
+        return bool(self.api_key)
+
+    def generate(self, text: str, path: Path, voice_id: str) -> dict:
+        resp = httpx.post(
+            f"{self.base_url}/v1/t2a_v2",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "model": self.model,
+                "text": text[:2000],
+                "stream": False,
+                "voice_setting": {"voice_id": voice_id, "speed": 1.0, "vol": 1.0, "pitch": 0},
+                "audio_setting": {"sample_rate": 24000, "bitrate": 128000, "format": "mp3", "channel": 1},
+            },
+            timeout=180,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        base = payload.get("base_resp") or {}
+        if base.get("status_code", 0) not in (0, None, 200):
+            raise RuntimeError(f"MiniMax TTS 失败：{base.get('status_msg', base.get('status_code'))}")
+        data = payload.get("data") or {}
+        audio_b64 = data.get("audio")
+        if not audio_b64:
+            raise RuntimeError(f"MiniMax TTS 响应缺少音频：{str(payload)[:200]}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(base64.b64decode(audio_b64))
+        duration = float((data.get("extra_info") or {}).get("audio_length", 0) or 0)
+        return {"duration": duration, "path": str(path), "subtitle": []}
+
+
 def _scene_director_prompt(scene: dict, series: dict, characters: dict, voice_notes: dict) -> str:
     """按 Audio Director cue sheet 组装单场景提示词。"""
     loc = scene.get("location", "场景")
@@ -138,8 +180,42 @@ def build_audio_plan(episode_script: dict) -> list[dict]:
     return plan
 
 
+def _mix_scene_audio(
+    ambience: Path, line_files: list[tuple[Path, float]], output: Path, duration: float
+) -> Path:
+    """把环境音与各对白轨按时间偏移混合为单场景 WAV（供整集拼接）。"""
+    ffmpeg = _find_ffmpeg()
+    inputs = ["-i", str(ambience)]
+    filters: list[str] = []
+    offset = 0.0
+    for idx, (line_path, line_dur) in enumerate(line_files, start=1):
+        inputs += ["-i", str(line_path)]
+        filters.append(f"[{idx}:a]adelay={int(offset * 1000)}|{int(offset * 1000)}[a{idx}]")
+        offset += max(0.2, line_dur) + 0.6
+    if filters:
+        amix = "".join(f"[a{idx}]" for idx in range(1, len(line_files) + 1))
+        filter_complex = ";".join(filters) + f";[0:a]{amix}amix=inputs={len(line_files) + 1}:duration=longest:normalize=0"
+    else:
+        filter_complex = "anull"
+    cmd = [
+        ffmpeg, "-y", "-loglevel", "error",
+        *inputs,
+        "-filter_complex", filter_complex,
+        "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le",
+        str(output),
+    ]
+    subprocess.run(cmd, check=True, capture_output=True, timeout=300)
+    return output
+
+
 def _generate_scene_audio(
-    project_id: int, episode: int, scene: dict, prompt: str, duration: float, api_key: str | None = None
+    project_id: int,
+    episode: int,
+    scene: dict,
+    prompt: str,
+    duration: float,
+    api_key: str | None = None,
+    voice_map: dict[str, str] | None = None,
 ) -> dict:
     rel = f"episodes/ep{episode:03d}/audio/scene-{scene['scene']:02d}.wav"
     path = _project_file(project_id, rel)
@@ -147,6 +223,30 @@ def _generate_scene_audio(
     if client.available:
         result = client.generate(prompt, path)
         return {"scene": scene["scene"], "audio": rel, "provider": "seed-audio", **result}
+    minimax = MiniMaxTTSClient()
+    if minimax.available:
+        ep_audio = _project_file(project_id, f"episodes/ep{episode:03d}/audio")
+        ep_audio.mkdir(parents=True, exist_ok=True)
+        voice_map = voice_map or {}
+        line_files: list[tuple[Path, float]] = []
+        for i, line in enumerate(scene.get("dialogue", [])):
+            speaker = line.get("speaker", "")
+            voice = voice_map.get(speaker, settings.minimax_tts_voice_female)
+            line_path = ep_audio / f"_line-{scene['scene']:02d}-{i}.mp3"
+            result = minimax.generate(line.get("line", ""), line_path, voice)
+            line_files.append((line_path, float(result.get("duration", 0))))
+        ambience = ep_audio / f"_ambience-{scene['scene']:02d}.wav"
+        _mock_wav(ambience, max(1.0, duration), freq=200 + scene["scene"] * 25, amp=0.06)
+        _mix_scene_audio(ambience, line_files, path, duration)
+        for tmp in [p for p, _ in line_files] + [ambience]:
+            tmp.unlink(missing_ok=True)
+        return {
+            "scene": scene["scene"],
+            "audio": rel,
+            "provider": "minimax",
+            "duration": duration,
+            "subtitle": [],
+        }
     _mock_wav(path, max(1.0, duration), freq=320 + scene["scene"] * 40, amp=0.18)
     return {"scene": scene["scene"], "audio": rel, "provider": "mock", "duration": duration, "subtitle": []}
 
@@ -162,6 +262,12 @@ def generate_project_audio(
 ) -> dict:
     """逐集生成配音/环境音（场景级 cue sheet），写入 audio-manifest.json。"""
     voice_notes = characters.get("voice_notes", {})
+    voice_map = {
+        c.get("name", ""): (
+            settings.minimax_tts_voice_female if c.get("gender") == "女" else settings.minimax_tts_voice_male
+        )
+        for c in characters.get("characters", [])
+    }
     tasks: list[tuple[int, dict, str, float]] = []
     for script in episodes:
         ep = script.get("episode", 1)
@@ -172,7 +278,7 @@ def generate_project_audio(
 
     with ThreadPoolExecutor(max_workers=min(3, settings.llm_max_workers)) as pool:
         futures = [
-            pool.submit(_generate_scene_audio, project_id, ep, scene, prompt, duration, api_key)
+            pool.submit(_generate_scene_audio, project_id, ep, scene, prompt, duration, api_key, voice_map)
             for ep, scene, prompt, duration in tasks
         ]
         results = [f.result() for f in futures]

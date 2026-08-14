@@ -180,6 +180,130 @@ def main() -> int:
     check("BYOK：Seedream 覆盖", images_svc.SeedreamClient(api_key="user-img").api_key == "user-img")
     check("BYOK：Seed Audio 覆盖", audio_svc.SeedAudioClient(api_key="user-voice").api_key == "user-voice")
 
+    # 7) MiniMax 生图
+    captured_mm_img = Captured()
+    mm_img_bytes = b"\x89PNG-mock-minimax"
+
+    def mm_img_responder(url, body, headers, request):
+        return httpx.Response(
+            200,
+            json={"data": {"image_urls": ["https://cdn/mm.png"]}, "base_resp": {"status_code": 0}},
+            request=request,
+        )
+
+    install_post_capture(images_svc, captured_mm_img, mm_img_responder)
+    images_svc.httpx.get = lambda url, timeout=None: httpx.Response(
+        200, content=mm_img_bytes, request=httpx.Request("GET", str(url))
+    )
+    mm_img = images_svc.MiniMaxImageClient(api_key="sk-mm")
+    mm_img.base_url = "https://api.minimaxi.com"
+    content = mm_img.generate("角色设定照", ratio="3:4")
+    check("MiniMax图：返回图片字节", content == mm_img_bytes)
+    req = captured_mm_img.requests[0]
+    check(
+        "MiniMax图：请求体",
+        req["url"].endswith("/v1/image_generation")
+        and req["json"].get("model") == settings.minimax_image_model
+        and req["json"].get("aspect_ratio") == "3:4"
+        and req["json"].get("response_format") == "url",
+        json.dumps(req["json"], ensure_ascii=False)[:200],
+    )
+
+    # 7.1) MiniMax 余额不足错误处理
+    def mm_img_err_responder(url, body, headers, request):
+        return httpx.Response(
+            200,
+            json={"data": None, "base_resp": {"status_code": 1008, "status_msg": "insufficient balance"}},
+            request=request,
+        )
+
+    install_post_capture(images_svc, Captured(), mm_img_err_responder)
+    try:
+        mm_img.generate("测试", ratio="1:1")
+        check("MiniMax图：余额不足抛错", False)
+    except RuntimeError as exc:
+        check("MiniMax图：余额不足抛错", "insufficient balance" in str(exc))
+
+    # 8) MiniMax 生视频（任务创建 + 轮询直链）
+    captured_mm_vid = Captured()
+
+    def mm_vid_responder(url, body, headers, request):
+        return httpx.Response(200, json={"task_id": "mm-task-1"}, request=request)
+
+    install_post_capture(videos_svc, captured_mm_vid, mm_vid_responder)
+    mm_vid = videos_svc.MiniMaxVideoClient(api_key="sk-mm")
+    mm_vid.base_url = "https://api.minimaxi.com"
+    task_id = mm_vid.create_task("推镜镜头", 10)
+    check("MiniMax视频：返回 task id", task_id == "mm-task-1")
+    req = captured_mm_vid.requests[0]
+    check(
+        "MiniMax视频：请求体",
+        req["url"].endswith("/v2/video_generation")
+        and req["json"].get("model") == settings.minimax_video_model
+        and req["json"].get("duration") == 10
+        and req["json"].get("resolution") == settings.minimax_video_resolution
+        and req["json"].get("ratio") == settings.seedance_ratio,
+        json.dumps(req["json"], ensure_ascii=False)[:200],
+    )
+
+    # 8.1) MiniMax 视频参考图（角色一致性）
+    tmp_ref = P("backend/data/_mm_ref.png")
+    tmp_ref.write_bytes(b"\x89PNG-ref")
+    captured_mm_vid2 = Captured()
+
+    def mm_vid_responder2(url, body, headers, request):
+        return httpx.Response(200, json={"task_id": "mm-task-2"}, request=request)
+
+    install_post_capture(videos_svc, captured_mm_vid2, mm_vid_responder2)
+    mm_vid.create_task("角色镜头", 5, reference_images=[tmp_ref])
+    req_ref = captured_mm_vid2.requests[0]
+    ref_items = [i for i in req_ref["json"]["content"] if i.get("role") == "reference_image"]
+    check(
+        "MiniMax视频：参考图加入 content",
+        len(ref_items) == 1 and ref_items[0]["image_url"]["url"].startswith("data:image/png;base64,"),
+        str(ref_items)[:200],
+    )
+    tmp_ref.unlink(missing_ok=True)
+
+    def mm_vid_get(url, headers=None, timeout=None):
+        return httpx.Response(
+            200,
+            json={"task": {"status": "succeeded", "content": {"url": "https://cdn/mm.mp4"}}},
+            request=httpx.Request("GET", str(url)),
+        )
+
+    videos_svc.httpx.get = mm_vid_get
+    url = mm_vid.poll_task("mm-task-1", timeout_seconds=1)
+    check("MiniMax视频：轮询返回直链", url == "https://cdn/mm.mp4")
+
+    # 9) MiniMax TTS
+    captured_mm_tts = Captured()
+    wav_b64_tts = base64.b64encode(b"MM-TTS-AUDIO").decode()
+
+    def mm_tts_responder(url, body, headers, request):
+        return httpx.Response(
+            200,
+            json={"data": {"audio": wav_b64_tts, "extra_info": {"audio_length": 2.5}}},
+            request=request,
+        )
+
+    install_post_capture(audio_svc, captured_mm_tts, mm_tts_responder)
+    mm_tts = audio_svc.MiniMaxTTSClient(api_key="sk-mm")
+    mm_tts.base_url = "https://api.minimaxi.com"
+    tmp2 = P("backend/data/_test_mm_tts.mp3")
+    result = mm_tts.generate("你好，世界", tmp2, "female-shaonv")
+    check("MiniMaxTTS：返回时长", result["duration"] == 2.5)
+    check("MiniMaxTTS：音频落盘", tmp2.read_bytes() == b"MM-TTS-AUDIO")
+    tmp2.unlink(missing_ok=True)
+    req = captured_mm_tts.requests[0]
+    check(
+        "MiniMaxTTS：请求体",
+        req["url"].endswith("/v1/t2a_v2")
+        and req["json"].get("model") == settings.minimax_tts_model
+        and req["json"].get("voice_setting", {}).get("voice_id") == "female-shaonv",
+        json.dumps(req["json"], ensure_ascii=False)[:200],
+    )
+
     print(f"\n真实档客户端单元测试：{PASS} 通过 / {FAIL} 失败")
     return 0 if FAIL == 0 else 1
 

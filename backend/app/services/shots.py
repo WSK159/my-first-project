@@ -39,6 +39,25 @@ def _translate(shots: dict) -> dict:
     return en
 
 
+def _normalize_references(shots: dict, characters: dict) -> dict:
+    """把 LLM 自由发挥的角色图引用归一化为实际文件路径（characters/<id>.png）。"""
+    name2file = {
+        c.get("name", ""): f"characters/{c.get('id', 'char')}.png"
+        for c in characters.get("characters", [])
+    }
+    for clip in shots.get("clips", []):
+        refs = clip.get("references") or {}
+        imgs = refs.get("images", [])
+        if not imgs:
+            continue
+        fixed = []
+        for img in imgs:
+            matched = next((name2file[n] for n in name2file if n and n in img), img)
+            fixed.append(matched)
+        refs["images"] = fixed
+    return shots
+
+
 def generate_shots(
     project_id: int,
     script: dict,
@@ -55,6 +74,7 @@ def generate_shots(
         shots = extract_json(complete(_build_prompt(script, characters, continuity), temperature=0.85, user_id=user_id))
         if not shots or "clips" not in shots:
             raise RuntimeError(f"第{episode}集分镜提示词生成失败")
+    shots = _normalize_references(shots, characters)
     rel = f"episodes/ep{episode:03d}/"
     write_text(project_id, rel + "video-prompts.md", to_markdown(f"第{episode}集 视频提示词", shots))
     write_json(project_id, rel + "video-prompts.json", shots)

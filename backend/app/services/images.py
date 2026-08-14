@@ -1,6 +1,7 @@
 """视觉资产生成：Seedream 角色图/场景图/封面（真实 API + mock 占位双路径）。"""
 
 import logging
+import base64
 import struct
 import zlib
 from pathlib import Path
@@ -91,6 +92,44 @@ class SeedreamClient:
         return image.content
 
 
+class MiniMaxImageClient:
+    """MiniMax image-01 生图客户端（CN/国际端点均可配置）。"""
+
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key or settings.minimax_api_key
+        self.base_url = settings.minimax_base_url.rstrip("/")
+        self.model = settings.minimax_image_model
+
+    @property
+    def available(self) -> bool:
+        return bool(self.api_key)
+
+    def generate(self, prompt: str, ratio: str = "9:16") -> bytes:
+        resp = httpx.post(
+            f"{self.base_url}/v1/image_generation",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "model": self.model,
+                "prompt": prompt,
+                "aspect_ratio": ratio,
+                "response_format": "url",
+            },
+            timeout=180,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        base = payload.get("base_resp") or {}
+        if base.get("status_code", 0) not in (0, None, 200):
+            raise RuntimeError(f"MiniMax 图片失败：{base.get('status_msg', base.get('status_code'))}")
+        data = payload.get("data") or {}
+        urls = data.get("image_urls") or data.get("urls") or []
+        if urls:
+            image = httpx.get(urls[0], timeout=180)
+            image.raise_for_status()
+            return image.content
+        raise RuntimeError(f"MiniMax 图片响应缺少数据：{str(payload)[:200]}")
+
+
 def generate_image(
     project_id: int, rel_path: str, prompt: str, ratio: str = "9:16", seed: str = "", api_key: str | None = None
 ) -> Path:
@@ -107,6 +146,16 @@ def generate_image(
             return path
         except Exception as exc:  # noqa: BLE001
             logger.warning("Seedream 生成失败，回退 mock 占位：%s", exc)
+    minimax = MiniMaxImageClient()
+    if minimax.available:
+        try:
+            content = minimax.generate(prompt, ratio=ratio)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+            logger.info("MiniMax 生成 %s (%d bytes)", rel_path, len(content))
+            return path
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("MiniMax 生成失败，回退 mock 占位：%s", exc)
     return _mock_png(path, _ratio_size(ratio), _color_for(seed or prompt), variant=len(seed))
 
 

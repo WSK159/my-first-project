@@ -373,8 +373,16 @@ def _run_inner(project_id: int) -> None:
                 continue
 
             def video_fn(e=ep, s=script, sh=shots):
+                refs: list[Path] = []
+                for clip in sh.get("clips", []):
+                    for img in (clip.get("references") or {}).get("images", []):
+                        p = project_dir(project_id) / img
+                        if p.exists() and p not in refs:
+                            refs.append(p)
+                    if len(refs) >= 3:
+                        break
                 manifest = videos_svc.generate_project_videos(
-                    project_id, [s], {e: sh}, continuity, api_key=api_key
+                    project_id, [s], {e: sh}, continuity, api_key=api_key, reference_images={e: refs}
                 )
                 clips = manifest.get("episodes", {}).get(str(e), [])
                 seconds_sum = 0
@@ -387,7 +395,8 @@ def _run_inner(project_id: int) -> None:
                             seconds_sum += int(probe_duration(video))
                         except Exception:  # noqa: BLE001
                             seconds_sum += 10
-                return {"seconds": seconds_sum, "clips": len(clips), "provider": "seedance" if api_key else "mock", "tier": tier}
+                provider = clips[0].get("provider", "mock") if clips else "mock"
+                return {"seconds": seconds_sum, "clips": len(clips), "provider": provider, "tier": tier}
 
             video_steps.append(
                 (
