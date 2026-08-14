@@ -121,11 +121,10 @@ def estimate_cost(data: EstimateIn, balance_cents: int) -> tuple[int, dict]:
     """按档位估算成本（分）。mock 档只算 LLM 粗略成本。"""
     from ..config import settings
 
-    llm_cost = (
-        data.episode_count
-        * settings.price_llm_input_cents_per_m
-        // 20  # 粗略占位：后续按实际 token 计算
-    )
+    # 真实档 LLM 调用次数：series+characters+outline+continuity+novel = 5 次全局，
+    # 每集 = card+script+shots = 3 次；与流水线逐步骤记账保持一致
+    llm_calls = 3 * data.episode_count + 5
+    llm_cost = llm_calls * (settings.price_llm_input_cents_per_m // 20)
     if data.video_tier == "mock":
         video_cost = 0
     elif data.video_tier == "fast":

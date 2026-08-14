@@ -182,6 +182,16 @@ def _episode_spent(project_id: int, episode: int) -> int:
     return total
 
 
+def _planned_cost_cents(step: str, seconds: int, tier: str) -> int:
+    """某步骤的计划成本（分），与 estimate_cost 同口径。mock 档为 0。"""
+    if tier == "mock":
+        return 0
+    if step == "videos":
+        factor = 2 if tier == "quality" else 1
+        return int(seconds * settings.price_video_cents_per_second * settings.platform_markup * factor)
+    return 0
+
+
 # ---------- 各阶段 ----------
 
 
@@ -359,8 +369,8 @@ def _run_inner(project_id: int) -> None:
             _upsert_task(project_id, 0, "images", status="skipped", result={"skipped": True})
         _update(project_id, "images", 0.52)
 
-        # 每集预算：按冻结金额均摊
-        ep_budget = int(frozen / max(episode_count, 1) * settings.episode_budget_ratio) if frozen > 0 else 0
+        # 每集预算：按冻结金额完整均摊（单集项目预算=整单）
+        ep_budget = int(frozen / max(episode_count, 1)) if frozen > 0 else 0
 
         # 8) 视频（按集）
         _update(project_id, "videos", 0.58)
@@ -370,7 +380,9 @@ def _run_inner(project_id: int) -> None:
             shots = shots_map.get(ep)
             if script is None or shots is None:
                 continue
-            if ep_budget and _episode_spent(project_id, ep) >= ep_budget:
+            planned_seconds = sum(max(4, min(int(c.get("duration_hint", 10)), 15)) for c in shots.get("clips", []))
+            planned_video = _planned_cost_cents("videos", planned_seconds, tier)
+            if ep_budget and _episode_spent(project_id, ep) + planned_video > ep_budget:
                 _upsert_task(project_id, ep, "videos", status="skipped", error="超出该集预算，已跳过视频生成")
                 _emit(project_id, "budget_skip", f"第{ep}集超出预算，跳过视频/音频/合成", episode=ep)
                 continue
@@ -422,7 +434,7 @@ def _run_inner(project_id: int) -> None:
             script = script_map.get(ep)
             if script is None:
                 continue
-            if ep_budget and _episode_spent(project_id, ep) >= ep_budget:
+            if ep_budget and _episode_spent(project_id, ep) > ep_budget:
                 continue
 
             def audio_fn(e=ep, s=script):
@@ -452,7 +464,7 @@ def _run_inner(project_id: int) -> None:
         for ep in range(1, episode_count + 1):
             if not _episode_done(project_id, ep, "videos"):
                 continue
-            if ep_budget and _episode_spent(project_id, ep) >= ep_budget:
+            if ep_budget and _episode_spent(project_id, ep) > ep_budget:
                 continue
 
             def assembly_fn(e=ep):
