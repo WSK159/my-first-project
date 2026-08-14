@@ -9,15 +9,17 @@
 - 后端：Python / FastAPI / SQLAlchemy / SQLite（生产可换 PostgreSQL）
 - 前端：Vue 3 + Vite（分阶段引入）
 - 任务：后台队列（in-process worker → 后续可换 Celery/Redis）
-- 内容引擎：DeepSeek / OpenAI 兼容 LLM（可插拔，含 mock）
+- 内容引擎：DeepSeek / OpenAI / MiniMax 兼容 LLM（可插拔，含 mock）
 - 视觉：火山方舟 Seedream（角色/场景/封面图）
 - 视频：火山方舟 Seedance（分段生成 + 尾帧衔接）
 - 音频：火山语音 Seed Audio（对白 TTS / 旁白 / 环境音 / 音乐）
+- MiniMax 全能力备选：文本 / image-01 生图 / H3 生视频（含角色参考图）/ speech-02-hd 多角色 TTS（未配火山时自动使用）
 - 后期：FFmpeg（拼接 / 混音 / 字幕烧录）
 
 ## 分步实施路线图
 
-> 当前进度：阶段 0-11 已完成并通过验证（mock 全链路 + API E2E + 前端构建 + 样片检查）。
+> 当前进度：阶段 0-11 已完成并通过验证；已部署至云服务器 112.124.107.148（内部链路 E2E 通过）。
+> 公网访问需在阿里云安全组放行 TCP 80/443；真实媒体需 MiniMax 账户充值后自动生效。
 > 目标形态：30-60 集完整短剧，每集独立成片 90-180 秒（默认 120 秒），全剧总时长约 2 小时，前后人物与环境保持一致。
 > 详细调研与补齐计划见 [docs/roadmap-60ep.md](docs/roadmap-60ep.md)。
 
