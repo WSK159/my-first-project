@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Project, User
+from ..services.delivery import build_delivery_package
 from ..services.project_store import project_dir
 from .auth import get_current_user
 
@@ -61,6 +62,22 @@ def download_archive(project_id: int, user: User = Depends(get_current_user), db
     if not path.exists():
         raise HTTPException(status_code=404, detail="交付包文件缺失")
     return FileResponse(path, media_type="application/zip", filename=path.name)
+
+
+@router.get("/{project_id}/metadata")
+def project_metadata(project_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """交付元数据（集数/总时长/按集清单/AI 标识/平台规格）。"""
+    project = _get_owned_project(project_id, user, db)
+    if not project.video_ready:
+        raise HTTPException(status_code=404, detail="交付尚未就绪")
+    path = project_dir(project_id) / "metadata.json"
+    if not path.exists():
+        build_delivery_package(project_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="元数据缺失")
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 @router.get("/{project_id}/collection")

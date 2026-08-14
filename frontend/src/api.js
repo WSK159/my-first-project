@@ -29,12 +29,17 @@ export const api = {
   register: (username, password) => request("/auth/register", { method: "POST", body: JSON.stringify({ username, password }) }),
   login: (username, password) => request("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   balance: () => request("/billing/balance"),
+  templates: () => request("/projects/templates"),
   estimate: (payload) => request("/projects/estimate", { method: "POST", body: JSON.stringify(payload) }),
   createProject: (payload) => request("/projects", { method: "POST", body: JSON.stringify(payload) }),
   listProjects: () => request("/projects"),
   getProject: (id) => request(`/projects/${id}`),
+  episodesStatus: (id) => request(`/projects/${id}/episodes`),
+  resume: (id) => request(`/projects/${id}/resume`, { method: "POST" }),
   novelUrl: (id) => `/api/delivery/${id}/novel`,
   videoUrl: (id, ep = 1) => `/api/delivery/${id}/video/${ep}`,
   archiveUrl: (id) => `/api/delivery/${id}/archive`,
+  collectionUrl: (id) => `/api/delivery/${id}/collection`,
+  metadataUrl: (id) => `/api/delivery/${id}/metadata`,
+  eventsUrl: (id) => `/api/projects/${id}/events?token=${encodeURIComponent(state.token)}`,
 };
-

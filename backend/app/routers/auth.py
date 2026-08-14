@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -38,10 +38,16 @@ def create_token(user_id: int) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm="HS256")
 
 
-def get_current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> User:
-    if not authorization.startswith("Bearer "):
+def get_current_user(
+    authorization: str = Header(default=""),
+    token: str = Query(default=""),
+    db: Session = Depends(get_db),
+) -> User:
+    """兼容 Authorization 头与 ?token= 查询参数（SSE/EventSource 无法自定义请求头）。"""
+    if authorization.startswith("Bearer "):
+        token = authorization[len("Bearer ") :]
+    if not token:
         raise HTTPException(status_code=401, detail="缺少 Bearer 令牌")
-    token = authorization[len("Bearer ") :]
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
     except jwt.PyJWTError:

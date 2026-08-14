@@ -1,6 +1,18 @@
 <template>
   <div class="panel glass">
     <h2>⚡ 一键生成短剧</h2>
+    <p class="hint">不会写剧情？选一个热门模板，或点「完全随机」，剩下的交给 AI。</p>
+    <div v-if="templates.length" class="tpl-grid">
+      <button
+        v-for="t in templates"
+        :key="t.name"
+        class="tpl-chip"
+        :class="{ active: selected === t.name }"
+        @click="applyTemplate(t)"
+      >
+        {{ t.name }}
+      </button>
+    </div>
     <div class="field">
       <label>一句话灵感（留空则点击随机）</label>
       <textarea
@@ -33,16 +45,23 @@
     <div v-if="cost" class="cost-line">
       <span>预估费用</span>
       <b>¥{{ (cost / 100).toFixed(2) }}</b>
+      <span v-if="cost > 0" class="cost-extra">
+        约 {{ estimateMinutes }} 分钟出片 · 共 {{ totalMinutes }} 分钟正片
+      </span>
+      <span v-if="cost && cost > state.balance" class="cost-warn">⚠ 余额不足，请充值或改选 mock 档</span>
     </div>
     <button class="btn-primary" :disabled="busy" @click="create">
       {{ busy ? "创建中…" : "🎬 开始一键生成" }}
     </button>
     <div v-if="error" class="error-box">{{ error }}</div>
+    <p class="hint" style="margin-top: 10px;">
+      小白提示：先选「mock · 免费试跑」验证全流程，满意后再用真实档生成可投稿成片。
+    </p>
   </div>
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, state } from "../api";
 
@@ -54,11 +73,22 @@ const tier = ref("mock");
 const cost = ref(0);
 const error = ref("");
 const busy = ref(false);
+const templates = ref([]);
+const selected = ref("");
+
+const totalMinutes = computed(() => Math.round((episodes.value * seconds.value) / 60));
+const estimateMinutes = computed(() => {
+  if (!episodes.value || !seconds.value) return 0;
+  const totalSeconds = episodes.value * seconds.value;
+  const factor = tier.value === "mock" ? 0.4 : 4;
+  return Math.max(1, Math.round((totalSeconds * factor) / 60));
+});
 
 function payload() {
   return {
     idea: idea.value,
     random_mode: !idea.value.trim(),
+    genre: "",
     episode_count: episodes.value,
     seconds_per_episode: seconds.value,
     video_tier: tier.value,
@@ -67,6 +97,16 @@ function payload() {
 
 function randomize() {
   idea.value = "";
+  selected.value = "";
+  cost.value = 0;
+}
+
+function applyTemplate(t) {
+  selected.value = t.name;
+  idea.value = t.idea;
+  episodes.value = t.episode_count;
+  seconds.value = t.seconds_per_episode;
+  tier.value = t.tier || "fast";
   cost.value = 0;
 }
 
@@ -93,4 +133,12 @@ async function create() {
     busy.value = false;
   }
 }
+
+onMounted(async () => {
+  try {
+    templates.value = (await api.templates()).templates || [];
+  } catch {
+    /* 模板加载失败不影响生成 */
+  }
+});
 </script>

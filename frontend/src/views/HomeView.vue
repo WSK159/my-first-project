@@ -11,13 +11,23 @@
       </div>
     </section>
 
+    <div v-if="!state.token" class="onboarding glass">
+      <div class="onb-step" v-for="s in onboarding" :key="s.t">
+        <div class="onb-icon">{{ s.icon }}</div>
+        <div>
+          <b>{{ s.t }}</b>
+          <p>{{ s.d }}</p>
+        </div>
+      </div>
+    </div>
+
     <AuthPanel v-if="!state.token" @authed="load" />
 
     <template v-else>
       <GeneratePanel />
 
       <section class="panel glass" style="margin-top: 22px;">
-        <h2>🗂️ 我的项目</h2>
+        <h2>🗂️ 任务中心（我的项目）</h2>
         <div v-if="loading" class="skeleton">加载中…</div>
         <div v-else-if="!projects.length" class="skeleton">还没有项目，输入一句话开始吧。</div>
         <div v-else class="grid">
@@ -29,7 +39,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { api, state } from "../api";
 import AuthPanel from "../components/AuthPanel.vue";
 import GeneratePanel from "../components/GeneratePanel.vue";
@@ -37,6 +47,12 @@ import ProjectCard from "../components/ProjectCard.vue";
 
 const projects = ref([]);
 const loading = ref(false);
+let timer = null;
+const onboarding = [
+  { icon: "💡", t: "第 1 步：输入一句话", d: "或点「完全随机」，AI 自动想题材、人设、剧情。" },
+  { icon: "🚀", t: "第 2 步：一键生成", d: "选集数与档位，后台自动完成剧本/图片/视频/配音/合成。" },
+  { icon: "📦", t: "第 3 步：下载交付包", d: "拿到的 zip 含成片、字幕、小说、封面与投稿规范。" },
+];
 
 async function load() {
   if (!state.token) return;
@@ -52,6 +68,10 @@ async function load() {
   }
 }
 
-onMounted(load);
-</script>
+onMounted(() => {
+  load();
+  timer = setInterval(load, 8000);
+});
 
+onUnmounted(() => clearInterval(timer));
+</script>
