@@ -32,7 +32,7 @@ class Project(Base):
     random_mode: Mapped[bool] = mapped_column(default=False)
     genre: Mapped[str] = mapped_column(String(64), default="")
     episode_count: Mapped[int] = mapped_column(Integer, default=1)
-    seconds_per_episode: Mapped[int] = mapped_column(Integer, default=60)
+    seconds_per_episode: Mapped[int] = mapped_column(Integer, default=120)
     video_tier: Mapped[str] = mapped_column(String(32), default="mock")  # mock | fast | quality
     status: Mapped[str] = mapped_column(String(32), default="pending")  # pending|running|done|failed
     progress: Mapped[float] = mapped_column(Float, default=0.0)

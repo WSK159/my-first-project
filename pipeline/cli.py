@@ -81,7 +81,7 @@ def main() -> None:
     parser.add_argument("--random", action="store_true", help="完全随机模式")
     parser.add_argument("--genre", default="", help="题材（可选）")
     parser.add_argument("--episodes", type=int, default=1, help="集数")
-    parser.add_argument("--seconds", type=int, default=60, help="单集秒数")
+    parser.add_argument("--seconds", type=int, default=120, help="单集秒数（90-180）")
     parser.add_argument("--project-id", type=int, default=0, help="指定项目目录编号（默认随机）")
     args = parser.parse_args()
 
