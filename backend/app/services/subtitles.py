@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from .audio import build_audio_plan
+from ..config import settings
 from .project_store import project_dir, read_json
 from .videos import _find_ffmpeg
 
@@ -37,6 +38,8 @@ def build_srt(project_id: int, episode: int) -> Path:
             blocks.append(f"{idx}\n{_fmt_ts(start)} --> {_fmt_ts(end)}\n{d['speaker']}：{d['line']}\n")
             idx += 1
     srt = "\n".join(blocks)
+    if settings.ai_subtitle_label and blocks:
+        srt = f"0\n00:00:00,000 --> 00:00:02,000\nAI 生成内容\n\n" + srt
     path = project_dir(project_id) / "episodes" / f"ep{episode:03d}" / "episode.srt"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(srt, encoding="utf-8")
@@ -62,4 +65,3 @@ def burn_subtitles(project_id: int, episode: int, source: Path) -> Path:
     except (subprocess.CalledProcessError, RuntimeError) as exc:
         logger.warning("字幕烧录失败，回退无字幕版本：%s", getattr(exc, "stderr", exc))
         return source
-

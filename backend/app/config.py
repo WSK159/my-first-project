@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{(DATA_DIR / 'platform.db').as_posix()}"
     secret_key: str = "dev-only-change-me-0123456789abcdef"
     jwt_expire_minutes: int = 1440
+    cors_origins: str = "*"  # 逗号分隔；上线建议收紧为前端域名
+    ai_subtitle_label: bool = True  # 成片字幕首行标注"AI 生成内容"
 
     # LLM
     llm_provider: str = "mock"  # mock | deepseek | openai

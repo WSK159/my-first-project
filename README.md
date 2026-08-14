@@ -17,7 +17,7 @@
 
 ## 分步实施路线图
 
-> 当前进度：阶段 0-9 已完成并通过验证（mock 全链路 + API E2E + 前端构建），阶段 10-11 实施中。
+> 当前进度：阶段 0-11 已完成并通过验证（mock 全链路 + API E2E + 前端构建 + 样片检查）。
 > 目标形态：30-60 集完整短剧，每集独立成片 90-180 秒（默认 120 秒），全剧总时长约 2 小时，前后人物与环境保持一致。
 > 详细调研与补齐计划见 [docs/roadmap-60ep.md](docs/roadmap-60ep.md)。
 
@@ -97,6 +97,20 @@
 45. ✅ 分集状态网格（每集：完成/生成中/失败 + 时长 + 下载）
 46. ✅ 成本预警（预估费用/出片时长/余额不足提示）+ 全剧合集下载 + 交付元数据接口
 
+### 阶段 10：成本控制与 BYOK
+
+47. ✅ 火山资源包预检（ListResourcePackages + Seedance fast 配额换算），估算/创建时预警与拦截
+48. ✅ 实际消耗计费（按真实视频时长），冻结差额自动退款
+49. ✅ 用户自带 Key（BYOK）加密管理：llm / seedream / seedance / seed_audio 四类
+
+### 阶段 11：上线与运营
+
+50. ✅ HTTPS 站点配置（nginx-https.conf + certbot 步骤）
+51. ✅ AI 生成内容标识：字幕首行标注 + metadata.json compliance + 投稿合规说明
+52. ✅ 投稿平台规格（抖音/快手/红果）自动生成 platforms.json + 静态文档 [docs/submission-spec.md](docs/submission-spec.md)
+53. ✅ 运营手册 [docs/operations.md](docs/operations.md)：定价/教程/故障排查/合规红线/上线清单
+54. ✅ nginx 性能与安全（gzip/长缓存/SSE 关闭缓冲/安全响应头）+ CORS 可配置收紧
+
 ## 目录结构
 
 ```text
@@ -106,7 +120,9 @@ AI短剧/
 ├── docs/
 │   ├── architecture.md       # 架构与流水线设计
 │   ├── api.md                # API 文档（随阶段补充）
-│   └── roadmap-60ep.md       # 60 集长剧路线图：同类项目调研 / 差距 / 成本 / 实施顺序
+│   ├── roadmap-60ep.md       # 60 集长剧路线图：同类项目调研 / 差距 / 成本 / 实施顺序
+│   ├── submission-spec.md    # 投稿平台规格与合规（抖音/快手/红果）
+│   └── operations.md         # 上线运营手册（定价/教程/排查/清单）
 ├── backend/                  # FastAPI 平台
 │   ├── requirements.txt
 │   ├── app/
