@@ -27,3 +27,7 @@ app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
 def health():
     return {"status": "ok", "app": settings.app_name}
 
+
+@app.get("/api/health")
+def api_health():
+    return {"status": "ok", "app": settings.app_name}
