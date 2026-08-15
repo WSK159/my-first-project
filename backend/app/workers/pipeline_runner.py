@@ -377,6 +377,8 @@ def _run_inner(project_id: int) -> None:
         _update(project_id, "images", 0.52)
 
         # 每集预算：按冻结金额完整均摊（单集项目预算=整单）
+        # 说明：估算基于目标时长，实际分镜总时长可能略高，预算仅作 2 倍防跑飞护栏，
+        # 避免误杀正常生成；真实消耗最终按实际计费并退款差额。
         ep_budget = int(frozen / max(episode_count, 1)) if frozen > 0 else 0
 
         # 8) 视频（按集）
@@ -389,7 +391,7 @@ def _run_inner(project_id: int) -> None:
                 continue
             planned_seconds = sum(max(4, min(int(c.get("duration_hint", 10)), 15)) for c in shots.get("clips", []))
             planned_video = _planned_cost_cents("videos", planned_seconds, tier)
-            if ep_budget and _episode_spent(project_id, ep) + planned_video > ep_budget:
+            if ep_budget and _episode_spent(project_id, ep) + planned_video > ep_budget * 2:
                 _upsert_task(project_id, ep, "videos", status="skipped", error="超出该集预算，已跳过视频生成")
                 _emit(project_id, "budget_skip", f"第{ep}集超出预算，跳过视频/音频/合成", episode=ep)
                 continue
@@ -441,7 +443,7 @@ def _run_inner(project_id: int) -> None:
             script = script_map.get(ep)
             if script is None:
                 continue
-            if ep_budget and _episode_spent(project_id, ep) > ep_budget:
+            if ep_budget and _episode_spent(project_id, ep) > ep_budget * 2:
                 continue
 
             def audio_fn(e=ep, s=script):
@@ -471,7 +473,7 @@ def _run_inner(project_id: int) -> None:
         for ep in range(1, episode_count + 1):
             if not _episode_done(project_id, ep, "videos"):
                 continue
-            if ep_budget and _episode_spent(project_id, ep) > ep_budget:
+            if ep_budget and _episode_spent(project_id, ep) > ep_budget * 2:
                 continue
 
             def assembly_fn(e=ep):

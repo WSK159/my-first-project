@@ -190,7 +190,7 @@ def _mix_scene_audio(
     offset = 0.0
     for idx, (line_path, line_dur) in enumerate(line_files, start=1):
         inputs += ["-i", str(line_path)]
-        filters.append(f"[{idx}:a]adelay={int(offset * 1000)}|{int(offset * 1000)}[a{idx}]")
+        filters.append(f"[{idx}:a]adelay={int(offset * 1000)}:all=1[a{idx}]")
         offset += max(0.2, line_dur) + 0.6
     if filters:
         amix = "".join(f"[a{idx}]" for idx in range(1, len(line_files) + 1))
